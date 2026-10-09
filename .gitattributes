@@ -1,0 +1,16 @@
+# Line endings are normalised to LF in the repository, whatever the checkout platform
+# uses. Without this, a Windows clone rewrites every file on the first touch and the
+# history fills up with whole-file diffs that say nothing.
+* text=auto eol=lf
+
+# Binary: never normalised, never diffed as text.
+*.png binary
+*.jpg binary
+*.ico binary
+*.exe binary
+*.woff2 binary
+
+# Generated files that git should not try to merge.
+package-lock.json -diff linguist-generated
+web/dist/** linguist-generated
+server/dist/** linguist-generated
