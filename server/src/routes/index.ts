@@ -11,6 +11,7 @@ import { registerSettingsRoutes } from './settings.js';
 import { registerStatsRoutes } from './stats.js';
 import { registerSystemRoutes } from './system.js';
 import { registerTransferRoutes } from './transfers.js';
+import { registerUpdateRoutes } from './update.js';
 
 /**
  * Mounts every `/api` route. One router keeps ordering explicit: static paths first, then the
@@ -27,6 +28,7 @@ export function registerRoutes(ctx: RouteContext, basePath = '/api'): Router {
   registerConnectionRoutes(router, ctx);
   registerStatsRoutes(router, ctx);
   registerNetToolRoutes(router, ctx);
+  registerUpdateRoutes(router, ctx);
   registerFileRoutes(router, ctx);
   registerTransferRoutes(router, ctx);
 
