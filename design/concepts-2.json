@@ -1,0 +1,19 @@
+{
+  "mode": "bnb4",
+  "width": 1024,
+  "height": 768,
+  "steps": 4,
+  "guidance": 1.0,
+  "items": [
+    {
+      "out": "concept-d-light-theme.png",
+      "seed": 707,
+      "prompt": "Light-mode desktop web application UI screenshot: a professional SSH remote file explorer called SSH Explorer, full screen, 1024x768. Three-pane layout on a clean white canvas. LEFT SIDEBAR 250px with a very light grey background: wordmark SSH Explorer top-left in near-black; section label CONNECTIONS in 10px letterspaced uppercase mid-grey; a flat list of saved host rows, each with a 7px colored status dot on the left (mint, amber, rose, violet, sky), host name in 13px near-black, user@10.0.4.11:22 underneath in 11px grey monospace; the selected row is filled solid mint-teal with dark text; below a TRANSFERS section with two thin mint progress rows. CENTER PANE on pure white: a tab strip with file tabs, a toolbar with icon-only back forward and up buttons in thin outline style, a breadcrumb path rendered as small monospace segments separated by thin chevron glyphs, a right-aligned search field with a magnifier icon, and a segmented list and grid view toggle. Below, a dense file table with hairline light-grey row separators: header row NAME SIZE MODIFIED PERMISSIONS OWNER in 10px letterspaced uppercase mid-grey with a sort chevron; each 30px row has a 16px outline folder or file icon, filename in 13px dark grey, metadata columns in 11px monospace grey; one row selected with a pale mint tinted background and a 2px mint left border. RIGHT INSPECTOR 290px separated by a hairline: selected file name in 15px near-black, a square file-type tile, a definition list with keys in 10px uppercase mid-grey and monospace values, and a small line-numbered text preview in a very light grey inset block. BOTTOM STATUS BAR: left connected, 12 ms; right 24 items, 1.2 GB. Bright clean airy palette: page white #FFFFFF, sidebar #F7F8F9, hairlines #E6E8EB, text #14181D, muted #6B7480, single mint-teal accent #12B886. Flat: no gradients, no drop shadows except one soft shadow, no rounded card containers, panes separated by hairlines. Crisp legible UI text, high information density, professional product screenshot."
+    },
+    {
+      "out": "concept-e-file-pane-detail.png",
+      "seed": 808,
+      "prompt": "Close-up detail screenshot of the main file browser pane of a dark-mode professional SSH file explorer web app, cropped so the toolbar, the column header row and eight file rows fill the frame, high pixel density, very large readable text. Top: a toolbar with a group of three thin-outline icon buttons (back arrow, forward arrow, up arrow), then a monospace breadcrumb path /var/www/production with thin chevron separators between segments, the last segment brighter, then a right-aligned search input with a magnifier glyph and a two-part segmented list and grid view toggle. Below: a table header row in 10px uppercase letterspaced mid-grey - NAME, SIZE, MODIFIED, PERMISSIONS, OWNER - with a small sort chevron next to SIZE. Then eight file rows, 34px tall, separated by 1px hairlines: a 16px thin-outline folder or file icon, the file name in 13px light grey, then SIZE right-aligned in 11px monospace, MODIFIED in 11px monospace, PERMISSIONS in 11px monospace like drwxr-xr-x, OWNER in 11px monospace. The third row is selected: a soft mint-teal tinted background across the whole row with a 2px solid mint-teal bar on its left edge and the file name in bright white. A thin mint-teal focus underline sits under the header row. Palette: page background #0A0C10, row hover #141A21, hairlines rgba(255,255,255,0.06), text #E6EAF0, muted #8A93A0, mint accent #5EE6C4. Flat, no gradients, no glows, no shadows, crisp monospace numerals, professional product screenshot detail."
+    }
+  ]
+}

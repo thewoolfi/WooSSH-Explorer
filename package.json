@@ -1,0 +1,44 @@
+{
+  "name": "ssh-explorer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WooSSH Explorer - a modern web file explorer and terminal for remote hosts over SSH",
+  "type": "module",
+  "workspaces": [
+    "server",
+    "web",
+    "desktop"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "npm run dev --workspace @ssh-explorer/server",
+    "dev:web": "npm run dev --workspace @ssh-explorer/web",
+    "build": "npm run build --workspace @ssh-explorer/server && npm run build --workspace @ssh-explorer/web",
+    "build:desktop": "npm run build && npm run build --workspace @ssh-explorer/desktop",
+    "start": "node server/dist/index.js",
+    "app": "npm run build:desktop && npm run start --workspace @ssh-explorer/desktop",
+    "app:smoke": "npm run build:desktop && npm run smoke --workspace @ssh-explorer/desktop",
+    "app:verify": "npm run build:desktop && node desktop/scripts/verify-package.mjs",
+    "app:e2e": "npm run build:desktop && npm run dist:dir --workspace @ssh-explorer/desktop && node desktop/scripts/verify-desktop-e2e.mjs",
+    "dist": "npm run build:desktop && npm run dist --workspace @ssh-explorer/desktop",
+    "install-app": "npm run dist && powershell -NoProfile -ExecutionPolicy Bypass -File tools/desktop/install.ps1",
+    "uninstall-app": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/desktop/uninstall.ps1",
+    "test": "npm run test --workspace @ssh-explorer/server",
+    "test:web": "npm run test --workspace @ssh-explorer/web",
+    "test:e2e": "npm run test:e2e --workspace @ssh-explorer/server",
+    "test:all": "npm run test --workspace @ssh-explorer/server && npm run test:e2e --workspace @ssh-explorer/server",
+    "verify": "npm run typecheck && npm run test:all && npm run test:web && npm run build",
+    "typecheck": "npm run typecheck --workspace @ssh-explorer/server && npm run typecheck --workspace @ssh-explorer/web && npm run typecheck --workspace @ssh-explorer/desktop",
+    "qa": "node tools/qa/run-qa.mjs",
+    "qa:token": "node tools/qa/check-token.mjs",
+    "mock-ssh": "tsx tools/qa/mock-ssh.ts"
+  },
+  "devDependencies": {
+    "playwright": "^1.64.0"
+  },
+  "license": "Apache-2.0",
+  "author": "Andrew Woolfi | Андрей Павлов <zxcadsl@gmail.com>"
+}

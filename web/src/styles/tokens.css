@@ -1,0 +1,223 @@
+/* ============================================================================
+   SSH Explorer — design tokens
+   Extracted from the accepted concept renders:
+     design/concepts/concept-a-main-explorer.png   (three-pane shell, selection)
+     design/concepts/concept-a-main-explorer-v2.png(sidebar hosts, table density)
+     design/concepts/concept-b-terminal-transfers.png (queue rows, terminal inset)
+     design/concepts/concept-c-connection-dialogs.png (dialogs, segmented control)
+   Dark is the default; [data-theme="light"] overrides the same variable names.
+   ========================================================================= */
+
+:root {
+  /* ---- type families ---------------------------------------------------- */
+  --font-ui: 'Inter var', 'Inter', 'Segoe UI Variable Text', 'Segoe UI', system-ui,
+    -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', 'Cascadia Code', 'SF Mono', Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+
+  /* ---- type scale (px) — never fall back to browser defaults ------------- */
+  --fs-micro: 10px;   /* uppercase letterspaced labels, column headers */
+  --fs-meta: 11px;    /* monospace metadata columns, captions */
+  --fs-sm: 12px;      /* secondary UI text, mono body */
+  --fs-body: 13px;    /* default UI text */
+  --fs-md: 15px;      /* inspector filename, section headings */
+  --fs-lg: 17px;      /* pane titles */
+  --fs-xl: 20px;      /* dialog titles */
+
+  --lh-tight: 1.2;
+  --lh-body: 1.45;
+  --lh-loose: 1.6;
+
+  --tracking-label: 0.09em;   /* uppercase micro labels */
+  --tracking-tight: -0.01em;  /* large headings */
+  --tracking-mono: 0.01em;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+
+  /* ---- spacing ---------------------------------------------------------- */
+  --sp-1: 2px;
+  --sp-2: 4px;
+  --sp-3: 6px;
+  --sp-4: 8px;
+  --sp-5: 10px;
+  --sp-6: 12px;
+  --sp-7: 14px;
+  --sp-8: 16px;
+  --sp-10: 20px;
+  --sp-12: 24px;
+  --sp-14: 28px;
+  --sp-16: 32px;
+
+  /* ---- geometry --------------------------------------------------------- */
+  --r-xs: 3px;
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-pill: 999px;
+
+  --h-topbar: 48px;
+  --h-tabstrip: 36px;
+  --h-toolbar: 44px;
+  --h-row: 30px;
+  --h-row-sidebar: 44px;
+  --h-statusbar: 28px;
+  --h-control: 28px;
+  --h-control-lg: 32px;
+
+  --w-sidebar: 252px;
+  --w-inspector: 292px;
+
+  /* ---- motion ----------------------------------------------------------- */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-1: 90ms;
+  --dur-2: 150ms;
+  --dur-3: 240ms;
+}
+
+/* ============================ dark (default) ============================= */
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --surface-0: #0a0c10; /* app background, sidebar, status bar */
+  --surface-1: #101419; /* main pane, inspector, modals */
+  --surface-2: #151a21; /* hover, raised rows */
+  --surface-3: #1b222b; /* active / pressed */
+  --surface-inset: #07090c; /* terminal, preview blocks, fingerprint boxes */
+  --surface-inverse: #e6eaf0;
+
+  --line: rgba(255, 255, 255, 0.07);
+  --line-soft: rgba(255, 255, 255, 0.045);
+  --line-strong: rgba(255, 255, 255, 0.13);
+  --scrim: rgba(4, 6, 9, 0.62);
+
+  --text: #e6eaf0;
+  --text-dim: #a7b0bc;
+  --text-muted: #8a93a0;
+  /* 4.6:1 on the panel surfaces — hints and metadata keys stay legible instead of
+     being decorative. The old value (#5c6673) measured 3.2:1 and failed AA. */
+  --text-faint: #6e7887;
+
+  --accent: #5ee6c4;
+  --accent-hover: #74eccd;
+  --accent-ink: #06231c; /* text on a filled accent surface */
+  --accent-soft: rgba(94, 230, 196, 0.14);
+  --accent-softer: rgba(94, 230, 196, 0.07);
+  --accent-line: rgba(94, 230, 196, 0.45);
+
+  --info: #6ba8ff;
+  --info-soft: rgba(107, 168, 255, 0.14);
+  --warn: #f5a524;
+  --warn-soft: rgba(245, 165, 36, 0.13);
+  --danger: #f2555a;
+  --danger-hover: #f76d72;
+  --danger-soft: rgba(242, 85, 90, 0.13);
+  --violet: #b08cff;
+  --violet-soft: rgba(176, 140, 255, 0.14);
+  --sky: #56c8e0;
+  --sky-soft: rgba(86, 200, 224, 0.14);
+  --rose: #f2789c;
+  --rose-soft: rgba(242, 120, 156, 0.14);
+  --slate: #93a1b1;
+  --slate-soft: rgba(147, 161, 177, 0.14);
+
+  --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.55), 0 2px 6px rgba(0, 0, 0, 0.4);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.45);
+
+  --row-selected: var(--accent-soft);
+  --row-selected-hover: rgba(94, 230, 196, 0.2);
+  --row-hover: var(--surface-2);
+  --row-stripe: rgba(255, 255, 255, 0.012);
+
+  --scrollbar-thumb: rgba(255, 255, 255, 0.13);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
+
+  --code-key: #7fd1ff;
+  --code-string: #9ee6a8;
+  --code-number: #f0b775;
+  --code-comment: #5c6673;
+  --code-punct: #8a93a0;
+}
+
+/* =============================== light ================================== */
+[data-theme='light'] {
+  color-scheme: light;
+
+  --surface-0: #f7f8f9; /* app background, sidebar */
+  --surface-1: #ffffff; /* main pane, inspector, modals */
+  --surface-2: #f1f3f5;
+  --surface-3: #e6e9ed;
+  --surface-inset: #f6f7f9;
+  --surface-inverse: #14181d;
+
+  --line: #e6e8eb;
+  --line-soft: #eef0f2;
+  --line-strong: #d5d9de;
+  --scrim: rgba(20, 24, 29, 0.34);
+
+  --text: #14181d;
+  --text-dim: #3c444e;
+  /* On light surfaces the old muted/faint pair measured 4.4:1 and 2.6:1. Both are
+     darkened so every text token clears AA while keeping the three-step hierarchy. */
+  --text-muted: #59616d;
+  --text-faint: #68717f;
+
+  --accent: #12b886;
+  --accent-hover: #0ea472;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(18, 184, 134, 0.13);
+  --accent-softer: rgba(18, 184, 134, 0.07);
+  --accent-line: rgba(18, 184, 134, 0.5);
+
+  --info: #2f7fe0;
+  --info-soft: rgba(47, 127, 224, 0.12);
+  --warn: #b46d05;
+  --warn-soft: rgba(180, 109, 5, 0.12);
+  --danger: #d92b31;
+  --danger-hover: #c0242a;
+  --danger-soft: rgba(217, 43, 49, 0.1);
+  --violet: #7c53d6;
+  --violet-soft: rgba(124, 83, 214, 0.12);
+  --sky: #0f8ba8;
+  --sky-soft: rgba(15, 139, 168, 0.12);
+  --rose: #cf3f6d;
+  --rose-soft: rgba(207, 63, 109, 0.12);
+  --slate: #6b7480;
+  --slate-soft: rgba(107, 116, 128, 0.12);
+
+  --shadow-pop: 0 10px 26px rgba(20, 24, 29, 0.13), 0 1px 3px rgba(20, 24, 29, 0.09);
+  --shadow-modal: 0 24px 56px rgba(20, 24, 29, 0.2), 0 2px 8px rgba(20, 24, 29, 0.1);
+
+  --row-selected: var(--accent-soft);
+  --row-selected-hover: rgba(18, 184, 134, 0.19);
+  --row-hover: var(--surface-2);
+  --row-stripe: rgba(20, 24, 29, 0.014);
+
+  --scrollbar-thumb: rgba(20, 24, 29, 0.17);
+  --scrollbar-thumb-hover: rgba(20, 24, 29, 0.28);
+
+  --code-key: #0550ae;
+  --code-string: #0a7b3e;
+  --code-number: #9a5b00;
+  --code-comment: #98a1ac;
+  --code-punct: #6b7480;
+}
+
+/* ---- host tag colours (same names in both themes) ---------------------- */
+:root {
+  --tag-mint: var(--accent);
+  --tag-mint-soft: var(--accent-soft);
+  --tag-amber: var(--warn);
+  --tag-amber-soft: var(--warn-soft);
+  --tag-violet: var(--violet);
+  --tag-violet-soft: var(--violet-soft);
+  --tag-sky: var(--sky);
+  --tag-sky-soft: var(--sky-soft);
+  --tag-rose: var(--rose);
+  --tag-rose-soft: var(--rose-soft);
+  --tag-slate: var(--slate);
+  --tag-slate-soft: var(--slate-soft);
+}

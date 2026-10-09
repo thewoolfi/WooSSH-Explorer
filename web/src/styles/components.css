@@ -1,0 +1,716 @@
+/* ============================================================================
+   UI primitives: buttons, inputs, segmented controls, feedback, file icons.
+   ========================================================================= */
+
+/* ---------------------------------------------------------------- buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  height: var(--h-control);
+  padding: 0 var(--sp-5);
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  font-size: var(--fs-body);
+  font-weight: var(--fw-medium);
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    background var(--dur-1) var(--ease),
+    border-color var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+
+.btn--sm {
+  height: 24px;
+  padding: 0 var(--sp-4);
+  font-size: var(--fs-sm);
+  gap: var(--sp-2);
+}
+
+.btn--lg {
+  height: var(--h-control-lg);
+  padding: 0 var(--sp-7);
+  font-size: var(--fs-body);
+  gap: var(--sp-4);
+}
+
+.btn--icon-only {
+  width: var(--h-control);
+  padding: 0;
+  gap: 0;
+}
+
+.btn--icon-only.btn--sm {
+  width: 24px;
+}
+
+.btn--icon-only.btn--lg {
+  width: var(--h-control-lg);
+}
+
+.btn--block {
+  width: 100%;
+}
+
+.btn--primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: var(--fw-semibold);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn--secondary {
+  background: var(--surface-2);
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.btn--secondary:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: var(--line-strong);
+}
+
+.btn--ghost {
+  color: var(--text-muted);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.btn--subtle {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.btn--subtle:hover:not(:disabled) {
+  background: var(--row-selected-hover);
+}
+
+.btn--danger {
+  background: var(--danger);
+  color: #fff;
+  font-weight: var(--fw-semibold);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: var(--danger-hover);
+}
+
+.btn__label {
+  display: inline-block;
+}
+
+/* ----------------------------------------------------------- icon buttons */
+.icon-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm);
+  color: var(--text-muted);
+  transition:
+    background var(--dur-1) var(--ease),
+    color var(--dur-1) var(--ease);
+}
+
+.icon-btn:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.icon-btn.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.icon-btn--secondary {
+  border: 1px solid var(--line);
+}
+
+.icon-btn--danger:hover:not(:disabled) {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.icon-btn[data-badge]::after {
+  content: attr(data-badge);
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 13px;
+  height: 13px;
+  padding: 0 3px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: var(--fw-semibold);
+  line-height: 13px;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------- inputs */
+.input {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: var(--h-control);
+  width: 100%;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface-0);
+  transition: border-color var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease);
+}
+
+.input:focus-within {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 3px var(--accent-softer);
+}
+
+.input.is-invalid {
+  border-color: var(--danger);
+}
+
+/* Composite controls render their own focus ring on the wrapper, so the inner
+   field must not paint a second one. */
+.palette__input input:focus-visible,
+.toolbar__search input:focus-visible,
+.crumbs__input:focus-visible,
+.input__field:focus-visible,
+.code__line:focus-visible {
+  outline: none;
+}
+
+.input__icon {
+  color: var(--text-faint);
+}
+
+.input__field {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  font-size: var(--fs-body);
+  color: var(--text);
+  background: transparent;
+}
+
+.input.is-mono .input__field {
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  letter-spacing: var(--tracking-mono);
+}
+
+.input__field::placeholder {
+  color: var(--text-faint);
+}
+
+.input__suffix {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+/* ---------------------------------------------------------------- fields */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-6);
+}
+
+.field__control {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* A segmented control inside a form row fills the row, matching the concept. */
+.field__control .segmented,
+.field > .segmented {
+  display: flex;
+  width: 100%;
+}
+
+.field__control .segmented__item,
+.field > .segmented .segmented__item {
+  flex: 1 1 0;
+}
+
+.field__label {
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.field--inline {
+  flex-direction: row;
+  align-items: center;
+}
+
+.field__hint {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+  line-height: var(--lh-body);
+}
+
+.field__error {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--danger);
+}
+
+/* ------------------------------------------------------- segmented control */
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-0);
+}
+
+.segmented__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  height: 22px;
+  padding: 0 var(--sp-5);
+  border-radius: var(--r-xs);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
+  transition: background var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+
+.segmented--md .segmented__item {
+  height: 24px;
+  font-size: var(--fs-body);
+}
+
+.segmented__item:hover {
+  color: var(--text);
+}
+
+.segmented__item.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.segmented--icons .segmented__item {
+  width: 26px;
+  padding: 0;
+}
+
+/* -------------------------------------------------------------- feedback */
+.spinner {
+  animation: spin 700ms linear infinite;
+}
+
+.status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--slate);
+  flex: none;
+}
+
+.status-dot--mint {
+  background: var(--accent);
+}
+.status-dot--amber {
+  background: var(--warn);
+}
+.status-dot--danger {
+  background: var(--danger);
+}
+.status-dot--violet {
+  background: var(--violet);
+}
+.status-dot--sky {
+  background: var(--sky);
+}
+.status-dot--rose {
+  background: var(--rose);
+}
+.status-dot--slate {
+  background: var(--slate);
+}
+
+.status-dot.is-pulsing {
+  animation: dot-pulse 1.4s var(--ease) infinite;
+}
+
+@keyframes dot-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 currentColor;
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 0 3px transparent;
+    opacity: 0.55;
+  }
+}
+
+.progress {
+  position: relative;
+  height: 3px;
+  width: 100%;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.progress__bar {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  transition: width var(--dur-2) var(--ease);
+}
+
+.progress--warn .progress__bar {
+  background: var(--warn);
+}
+
+.progress--danger .progress__bar {
+  background: var(--danger);
+}
+
+.progress.is-indeterminate .progress__bar {
+  width: 40%;
+  animation: indeterminate 1.3s var(--ease) infinite;
+}
+
+/* ----------------------------------------------------------- empty state */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-4);
+  padding: var(--sp-16) var(--sp-8);
+  text-align: center;
+  min-height: 200px;
+}
+
+.empty__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.empty__title {
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
+  color: var(--text);
+}
+
+.empty__detail {
+  max-width: 42ch;
+  font-size: var(--fs-body);
+  color: var(--text-muted);
+  line-height: var(--lh-loose);
+}
+
+.empty__action {
+  margin-top: var(--sp-2);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 var(--sp-3);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--text-dim);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+.badge--mint {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.badge--amber {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.badge--danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------- file icons */
+.file-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  flex: none;
+}
+
+.file-icon--folder {
+  color: var(--accent);
+}
+
+.file-icon--image {
+  color: var(--violet);
+}
+.file-icon--archive {
+  color: var(--warn);
+}
+.file-icon--code {
+  color: var(--info);
+}
+.file-icon--key {
+  color: var(--rose);
+}
+.file-icon--video {
+  color: var(--sky);
+}
+.file-icon--audio {
+  color: var(--sky);
+}
+.file-icon--pdf {
+  color: var(--danger);
+}
+.file-icon--sheet {
+  color: var(--accent);
+}
+.file-icon--database {
+  color: var(--violet);
+}
+.file-icon--text {
+  color: var(--text-muted);
+}
+.file-icon--binary {
+  color: var(--text-faint);
+}
+
+.file-icon__link {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+  display: inline-flex;
+  padding: 1px;
+  border-radius: var(--r-xs);
+  background: var(--surface-1);
+  color: var(--text-faint);
+}
+
+/* On a selected row the accent bar and tint already carry the state, so the
+   glyph only steps up in brightness — three mint icons in a multi-selection
+   reads as noise. */
+.frow.is-selected .file-icon,
+.gtile.is-selected .file-icon {
+  color: var(--text);
+}
+
+.host-row__dot--mint {
+  color: var(--accent);
+}
+.host-row__dot--amber {
+  color: var(--warn);
+}
+.host-row__dot--violet {
+  color: var(--violet);
+}
+.host-row__dot--sky {
+  color: var(--sky);
+}
+.host-row__dot--rose {
+  color: var(--rose);
+}
+.host-row__dot--slate {
+  color: var(--slate);
+}
+
+/* --------------------------------------------------------------- tooltip */
+.tooltip {
+  position: relative;
+  display: inline-flex;
+}
+
+.tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  z-index: 60;
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-sm);
+  background: var(--surface-inverse);
+  color: var(--surface-0);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-2) var(--ease);
+}
+
+.tooltip:hover::after {
+  opacity: 1;
+}
+
+.tooltip--bottom::after {
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.tooltip--top::after {
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.tooltip--right::after {
+  left: calc(100% + 6px);
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* ---------------------------------------------------------- mini transfers */
+.mini-queue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding: var(--sp-3) var(--sp-5) var(--sp-5);
+}
+
+.mini-xfer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.mini-xfer__top {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.mini-xfer__dir {
+  color: var(--text-faint);
+}
+
+.mini-xfer__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+}
+
+.mini-xfer__speed {
+  font-size: var(--fs-micro);
+  color: var(--text-muted);
+}
+
+.mini-xfer__ok {
+  color: var(--accent);
+}
+
+.mini-xfer__err {
+  color: var(--danger);
+}
+
+.mini-xfer.is-done .mini-xfer__name,
+.mini-xfer.is-cancelled .mini-xfer__name {
+  color: var(--text-faint);
+}
+
+.mini-xfer.is-error .mini-xfer__name {
+  color: var(--danger);
+}
+
+.mini-xfer__cancel {
+  display: inline-flex;
+  color: var(--text-faint);
+}
+
+.mini-xfer__cancel:hover {
+  color: var(--danger);
+}
+
+.mini-queue__total {
+  font-size: var(--fs-micro);
+  color: var(--text-faint);
+  text-align: right;
+}
+.xfercfg { position: relative; display: flex; align-items: center; }
+.xfercfg__pop {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  min-width: 260px;
+  padding: var(--sp-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-pop);
+}
+.xfercfg__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-5);
+}
+.xfercfg__row + .xfercfg__row { margin-top: var(--sp-5); }
+.xfercfg__row select,
+.xfercfg__row input {
+  height: 26px;
+  min-width: 96px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  background: var(--surface-inset);
+  color: var(--text);
+  font-size: var(--fs-meta);
+}
+.xfercfg__input { display: inline-flex; align-items: center; gap: var(--sp-3); }
+.xfercfg__unit { font-size: var(--fs-sm); color: var(--text-faint); }

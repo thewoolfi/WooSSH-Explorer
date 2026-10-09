@@ -1,0 +1,44 @@
+appId: dev.sshexplorer.desktop
+productName: WooSSH Explorer
+copyright: WooSSH Explorer
+
+directories:
+  output: ../release
+  buildResources: resources
+
+# Only the bundled shell and its assets ship; the API server is compiled into
+# build/main.cjs and the built web app arrives via extraResources.
+files:
+  - build/**
+  - package.json
+  - '!**/*.map'
+
+extraResources:
+  - from: ../web/dist
+    to: web
+
+asar: true
+compression: normal
+
+win:
+  icon: resources/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: WooSSH Explorer
+  uninstallDisplayName: WooSSH Explorer
+  artifactName: ${productName}-Setup-${version}.${ext}
+  deleteAppDataOnUninstall: false
+
+portable:
+  artifactName: ${productName}-Portable-${version}.${ext}
+  requestExecutionLevel: user

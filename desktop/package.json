@@ -1,0 +1,24 @@
+{
+  "name": "@ssh-explorer/desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "WooSSH Explorer desktop shell (Electron)",
+  "author": "Andrew Woolfi | Андрей Павлов <zxcadsl@gmail.com>",
+  "main": "build/main.cjs",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node scripts/launch.mjs",
+    "smoke": "node scripts/launch.mjs --smoke",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dist": "node scripts/build.mjs && electron-builder --win --config electron-builder.yml",
+    "dist:dir": "node scripts/build.mjs && electron-builder --win --dir --config electron-builder.yml",
+    "verify": "node scripts/verify-desktop-e2e.mjs"
+  },
+  "devDependencies": {
+    "electron": "38.8.6",
+    "electron-builder": "26.15.3",
+    "esbuild": "^0.25.10",
+    "typescript": "^5.9.3"
+  },
+  "license": "Apache-2.0"
+}
