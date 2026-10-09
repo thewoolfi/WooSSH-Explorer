@@ -13,7 +13,11 @@ import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const NAME = 'Andrew Woolfi | Андрей Павлов';
-const EMAIL = 'zxcadsl@gmail.com';
+/**
+ * The GitHub noreply address. Commits made with it are still attributed to the account,
+ * and the real address never enters the public history.
+ */
+const EMAIL = '50448139+thewoolfi@users.noreply.github.com';
 /** The licence carries one name; both spellings keep it unambiguous in either language. */
 const COPYRIGHT_HOLDER = 'Andrew Woolfi (Андрей Павлов)';
 const YEAR = new Date().getFullYear();
