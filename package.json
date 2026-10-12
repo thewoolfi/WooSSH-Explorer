@@ -2,7 +2,7 @@
   "name": "ssh-explorer",
   "version": "1.0.0",
   "private": true,
-  "description": "WooSSH Explorer - a modern web file explorer and terminal for remote hosts over SSH",
+  "description": "WooSSH - a modern web file explorer and terminal for remote hosts over SSH",
   "type": "module",
   "workspaces": [
     "server",

@@ -1,8 +1,11 @@
-"""Draws the WooSSH Explorer application icon.
+"""Draws the WooSSH application icon.
 
-An app icon has to survive 16x16 in a taskbar, so it is built from geometry rather than
-generated as a picture: a folder silhouette and a terminal prompt, in the product's own
-mint accent. Run: python tools/desktop/make-icon.py
+The product is named after its mark, so the mark is the letter: a `W` whose last stroke
+leans into a cursor block, reading as `W_` — a wordmark and a terminal prompt at once.
+Built from geometry rather than generated as a picture, because an application icon has
+to stay legible at 16x16 in a taskbar and a scaled-down illustration does not.
+
+Run: python tools/desktop/make-icon.py
 """
 from pathlib import Path
 
@@ -10,11 +13,12 @@ from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[2]
 SIZE = 1024
-BG_TOP = (22, 30, 38)
-BG_BOTTOM = (12, 16, 21)
+
+BG_TOP = (24, 32, 41)
+BG_BOTTOM = (11, 15, 20)
 MINT = (94, 230, 196)
-MINT_DIM = (46, 150, 128)
-INK = (6, 22, 18)
+MINT_DEEP = (34, 132, 113)
+EDGE = (40, 52, 64)
 
 
 def rounded_mask(size, radius):
@@ -35,8 +39,25 @@ def vertical_gradient(size, top, bottom):
     return image
 
 
+def draw_w(draw, colour, width, top, bottom, left, right):
+    """A W as one polyline, so the joints meet cleanly at any size."""
+    span = right - left
+    mid_top = top + (bottom - top) * 0.34  # the middle peak sits lower, as letterforms do
+    points = [
+        (left, top),
+        (left + span * 0.25, bottom),
+        (left + span * 0.5, mid_top),
+        (left + span * 0.75, bottom),
+        (right, top),
+    ]
+    draw.line(points, fill=colour, width=width, joint="curve")
+    # Square off the outer ends; `line` leaves them rounded, which reads as a scribble.
+    radius = width / 2
+    for x, y in (points[0], points[-1]):
+        draw.rectangle((x - radius, y - radius, x + radius, y + radius), fill=colour)
+
+
 def build():
-    # A squircle, the shape Windows and macOS both read as "application".
     base = vertical_gradient(SIZE, BG_TOP, BG_BOTTOM).convert("RGBA")
     base.putalpha(rounded_mask(SIZE, int(SIZE * 0.22)))
 
@@ -45,50 +66,36 @@ def build():
 
     s = SIZE / 1024.0
 
-    # Folder body, dimmed mint so the prompt stays the brightest thing on the tile.
-    left, top, right, bottom = 150 * s, 330 * s, 874 * s, 830 * s
-    tab_h = 90 * s
-    draw.rounded_rectangle(
-        (left, top - tab_h, left + 300 * s, top + 20 * s),
-        radius=40 * s,
-        fill=MINT_DIM,
-    )
-    draw.rounded_rectangle((left, top, right, bottom), radius=64 * s, fill=MINT_DIM)
+    # A soft disc behind the mark: gives the letter something to sit on without a hard edge.
+    draw.ellipse((120 * s, 120 * s, 904 * s, 904 * s), fill=(19, 27, 34, 255))
 
-    # Inset panel: a terminal window sitting in the folder.
-    pad = 74 * s
-    draw.rounded_rectangle(
-        (left + pad, top + pad, right - pad, bottom - pad),
-        radius=44 * s,
-        fill=BG_BOTTOM + (255,),
+    stroke = int(94 * s)
+    # The W takes the left two thirds and the cursor the rest, so the pair reads as `W_`
+    # rather than as a letter that happens to have a block beside it.
+    draw_w(
+        draw,
+        MINT,
+        stroke,
+        top=352 * s,
+        bottom=690 * s,
+        left=206 * s,
+        right=620 * s,
     )
 
-    # The prompt: a chevron and a cursor block, the two shapes everyone reads as a shell.
-    cx = left + pad + 96 * s
-    cy = (top + bottom) / 2
-    arm = 96 * s
-    width = int(46 * s)
-    draw.line(
-        [(cx - arm * 0.6, cy - arm), (cx + arm * 0.4, cy), (cx - arm * 0.6, cy + arm)],
-        fill=MINT,
-        width=width,
-        joint="curve",
-    )
-    cursor_x = cx + arm * 1.05
+    # Baseline-aligned with the W, and dimmer, so the letter leads and the cursor answers.
     draw.rounded_rectangle(
-        (cursor_x, cy + arm * 0.42, cursor_x + arm * 1.35, cy + arm * 0.92),
-        radius=int(12 * s),
-        fill=MINT,
+        (676 * s, 606 * s, 818 * s, 690 * s),
+        radius=int(16 * s),
+        fill=MINT_DEEP,
     )
 
     composed = Image.alpha_composite(base, layer)
 
-    # A hairline of the accent around the tile so it does not vanish on a dark taskbar.
     edge = ImageDraw.Draw(composed)
     edge.rounded_rectangle(
         (2 * s, 2 * s, SIZE - 2 * s, SIZE - 2 * s),
         radius=int(SIZE * 0.22),
-        outline=(40, 52, 64, 255),
+        outline=EDGE + (255,),
         width=max(1, int(4 * s)),
     )
     return composed
@@ -103,15 +110,21 @@ def main():
     build_dir = ROOT / "desktop" / "build"
     build_dir.mkdir(parents=True, exist_ok=True)
     icon.save(build_dir / "icon.png")
+    # Each size is rendered by the format itself, not downscaled from one bitmap, so
+    # Windows picks a crisp image for the taskbar instead of a blurry one.
+    icon.save(
+        build_dir / "icon.ico",
+        sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)],
+    )
 
-    # electron-builder wants an .ico on Windows; every size is rendered separately so
-    # Windows picks a crisp one instead of scaling a big bitmap down to 16 px.
-    sizes = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
-    icon.save(build_dir / "icon.ico", sizes=sizes)
+    resources = ROOT / "desktop" / "resources"
+    resources.mkdir(parents=True, exist_ok=True)
+    for name in ("icon.ico", "icon.png"):
+        (resources / name).write_bytes((build_dir / name).read_bytes())
 
-    print("wrote", build_dir / "icon.ico")
-    print("wrote", build_dir / "icon.png")
-    print("wrote", out / "app-icon.png")
+    print("wrote desktop/build/icon.ico")
+    print("wrote desktop/resources/icon.ico")
+    print("wrote design/app-icon.png")
 
 
 if __name__ == "__main__":

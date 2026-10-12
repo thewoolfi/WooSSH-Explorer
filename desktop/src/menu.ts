@@ -158,7 +158,7 @@ export function buildMenu(context: MenuContext): Menu {
       label: '&Help',
       submenu: [
         {
-          label: `WooSSH Explorer ${context.version}`,
+          label: `WooSSH ${context.version}`,
           click: () => context.send('command-palette'),
         },
         {

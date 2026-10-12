@@ -51,7 +51,7 @@ delete env.ELECTRON_RUN_AS_NODE;
 function killStrayInstances() {
   if (process.platform !== 'win32') return;
   const script =
-    "Get-Process | Where-Object { $_.ProcessName -eq 'WooSSH Explorer' } | Stop-Process -Force -ErrorAction SilentlyContinue";
+    "Get-Process | Where-Object { $_.ProcessName -eq 'WooSSH' } | Stop-Process -Force -ErrorAction SilentlyContinue";
   try {
     const { execFileSync } = require('node:child_process');
     execFileSync('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore' });

@@ -2,7 +2,7 @@
  * Boots a packaged build (`release/win-unpacked` or the portable exe) in smoke
  * mode and reports whether the real, shipped artifact starts and renders.
  *
- *   node desktop/scripts/verify-package.mjs ["path\\to\\WooSSH Explorer.exe"]
+ *   node desktop/scripts/verify-package.mjs ["path\\to\\WooSSH.exe"]
  */
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -22,7 +22,7 @@ const repoDir = path.resolve(here, '..', '..');
 function killLeftovers() {
   if (process.platform !== 'win32') return;
   const script =
-    "Get-Process | Where-Object { $_.ProcessName -eq 'WooSSH Explorer' } | Stop-Process -Force -ErrorAction SilentlyContinue";
+    "Get-Process | Where-Object { $_.ProcessName -eq 'WooSSH' } | Stop-Process -Force -ErrorAction SilentlyContinue";
   try {
     const { execFileSync } = require('node:child_process');
     execFileSync('powershell', ['-NoProfile', '-Command', script], { stdio: 'ignore' });
@@ -32,7 +32,7 @@ function killLeftovers() {
 }
 
 const target =
-  process.argv[2] ?? path.join(repoDir, 'release', 'win-unpacked', 'WooSSH Explorer.exe');
+  process.argv[2] ?? path.join(repoDir, 'release', 'win-unpacked', 'WooSSH.exe');
 
 if (!(await access(target).then(() => true).catch(() => false))) {
   console.error(`[verify] packaged executable not found: ${target}`);

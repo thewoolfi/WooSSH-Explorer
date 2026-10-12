@@ -6,7 +6,7 @@
  * artifact: window, menu, embedded API, ssh2 handshake, host-key trust, SFTP
  * listing and the native download pipeline.
  *
- *   node desktop/scripts/verify-desktop-e2e.mjs ["path\\to\\WooSSH Explorer.exe"]
+ *   node desktop/scripts/verify-desktop-e2e.mjs ["path\\to\\WooSSH.exe"]
  */
 import { spawn } from 'node:child_process';
 import { access, mkdir, readFile, rm } from 'node:fs/promises';
@@ -17,7 +17,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const repoDir = path.resolve(here, '..', '..');
 const tsx = path.join(repoDir, 'node_modules', '.bin', process.platform === 'win32' ? 'tsx.cmd' : 'tsx');
 
-const target = process.argv[2] ?? path.join(repoDir, 'release', 'win-unpacked', 'WooSSH Explorer.exe');
+const target = process.argv[2] ?? path.join(repoDir, 'release', 'win-unpacked', 'WooSSH.exe');
 if (!(await access(target).then(() => true).catch(() => false))) {
   console.error(`[e2e] packaged executable not found: ${target}\n[e2e] build it first: npm run dist`);
   process.exit(1);

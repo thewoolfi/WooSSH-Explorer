@@ -1,4 +1,4 @@
-# WooSSH Explorer — visual QA ledger
+# WooSSH — visual QA ledger
 
 The accepted concept set lives in [`design/concepts/`](../design/concepts). The
 implementation screenshots in `design/qa/` are produced by

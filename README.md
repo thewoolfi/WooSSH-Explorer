@@ -1,4 +1,4 @@
-# WooSSH Explorer
+# WooSSH
 
 A modern file explorer and terminal for remote hosts, over SSH — as a desktop
 application, and as a web app from the same code.
@@ -7,14 +7,14 @@ The backend speaks SSH/SFTP to the remote host; the frontend behaves like a desk
 manager: dense sortable tables, multi-select, drag & drop uploads, a live transfer queue,
 an inspector with inline previews, and a real PTY terminal.
 
-![WooSSH Explorer — file browser](design/screenshot-explorer-dark.png)
+![WooSSH — file browser](design/screenshot-explorer-dark.png)
 
 <details>
 <summary>Light theme and terminal</summary>
 
-![WooSSH Explorer — light theme](design/screenshot-explorer-light.png)
+![WooSSH — light theme](design/screenshot-explorer-light.png)
 
-![WooSSH Explorer — terminal](design/screenshot-terminal.png)
+![WooSSH — terminal](design/screenshot-terminal.png)
 
 </details>
 
@@ -26,7 +26,7 @@ The visual concepts this interface was built from live in
 
 ## Desktop app
 
-<img src="design/app-icon.png" alt="WooSSH Explorer app icon" width="96" align="right" />
+<img src="design/app-icon.png" alt="WooSSH app icon" width="96" align="right" />
 
 **Install it once, then launch it from the icon.** The installer creates a Desktop and a
 Start Menu shortcut and registers an uninstaller — no terminal, no `npm`, no browser.
@@ -36,8 +36,8 @@ npm install
 npm run install-app        # builds, packages and installs for the current user
 ```
 
-Then double-click **WooSSH Explorer** on the Desktop. It installs per-user under
-`%LOCALAPPDATA%\Programs\WooSSH Explorer`, appears in *Add or remove programs*, and needs no
+Then double-click **WooSSH** on the Desktop. It installs per-user under
+`%LOCALAPPDATA%\Programs\WooSSH`, appears in *Add or remove programs*, and needs no
 administrator prompt. Remove it with `npm run uninstall-app`.
 
 Prefer not to install anything? `npm run dist` produces two drop-in artifacts in
@@ -45,8 +45,8 @@ Prefer not to install anything? `npm run dist` produces two drop-in artifacts in
 
 | file | what it is |
 | --- | --- |
-| `WooSSH Explorer-Portable-<version>.exe` | one self-contained executable — double-click and it runs |
-| `WooSSH Explorer-Setup-<version>.exe` | the installer behind `npm run install-app` |
+| `WooSSH-Portable-<version>.exe` | one self-contained executable — double-click and it runs |
+| `WooSSH-Setup-<version>.exe` | the installer behind `npm run install-app` |
 
 ### What the desktop shell adds
 
@@ -61,7 +61,7 @@ Prefer not to install anything? `npm run dist` produces two drop-in artifacts in
 - **Single instance**: launching the shortcut again focuses the window you already have.
 - **A loopback-only API on an ephemeral port**, started inside the app — nothing extra to
   run, and no fixed port to collide with a development server.
-- Settings, saved hosts and `known_hosts` live in `%APPDATA%\WooSSH Explorer`.
+- Settings, saved hosts and `known_hosts` live in `%APPDATA%\WooSSH`.
 
 Working on the shell itself:
 
@@ -104,7 +104,7 @@ npm start            # serves the built web app and the API together
 `start` prints the URL to open, **including the access token**:
 
 ```
-WooSSH Explorer ready
+WooSSH ready
   http://127.0.0.1:5178/?token=8Xk2…
 ```
 
@@ -215,8 +215,8 @@ npm start            # serves the built web app and the API from one port
 | --- | --- | --- |
 | `SSH_EXPLORER_PORT` | `5178` (desktop: OS-assigned) | API port |
 | `SSH_EXPLORER_HOST` | `127.0.0.1` | bind address |
-| `SSH_EXPLORER_HOME` | `~/.ssh-explorer` (desktop: `%APPDATA%\WooSSH Explorer`) | state directory (`known_hosts`, `profiles.json`) |
-| `SSH_EXPLORER_DOWNLOAD_DIR` | `~/Downloads/WooSSH Explorer` (desktop: your Downloads folder) | default download destination |
+| `SSH_EXPLORER_HOME` | `~/.ssh-explorer` (desktop: `%APPDATA%\WooSSH`) | state directory (`known_hosts`, `profiles.json`) |
+| `SSH_EXPLORER_DOWNLOAD_DIR` | `~/Downloads/WooSSH` (desktop: your Downloads folder) | default download destination |
 | `SSH_EXPLORER_STATIC` | `web/dist` when present | built web app to serve |
 | `SSH_EXPLORER_LOG_LEVEL` | `info` | `silent`…`debug` |
 | `SSH_EXPLORER_TOKEN` | unset | when set, `/api` requires `x-ssh-explorer-token` |

@@ -1,6 +1,6 @@
 appId: dev.sshexplorer.desktop
-productName: WooSSH Explorer
-copyright: WooSSH Explorer
+productName: WooSSH
+copyright: WooSSH
 
 directories:
   output: ../release
@@ -34,8 +34,8 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: WooSSH Explorer
-  uninstallDisplayName: WooSSH Explorer
+  shortcutName: WooSSH
+  uninstallDisplayName: WooSSH
   artifactName: ${productName}-Setup-${version}.${ext}
   deleteAppDataOnUninstall: false
 

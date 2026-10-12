@@ -41,7 +41,7 @@ const en = {
   'common.no': 'No',
 
   /* ---------------------------------------------------------------- brand */
-  'app.name': 'WooSSH Explorer',
+  'app.name': 'WooSSH',
   'app.tagline': 'Remote files, without leaving your desktop',
   'app.taglineWeb': 'Remote files, without leaving the browser',
 
@@ -362,7 +362,7 @@ const en = {
   'hostkey.fingerprint': 'SHA256 fingerprint',
   'hostkey.trustWrites': 'Trusting writes the key to {path}.',
   'hostkey.trustWritesTail':
-    'If this key ever changes, WooSSH Explorer refuses the connection instead of trusting it silently.',
+    'If this key ever changes, WooSSH refuses the connection instead of trusting it silently.',
   'hostkey.trust': 'Trust and continue',
 
   /* ----------------------------------------------------------- terminal */
@@ -532,7 +532,7 @@ const en = {
 
   'net.title': 'Ping & traceroute',
   'net.subtitle': 'From this machine to the host — no connection needed',
-  'net.hint': 'Runs on the computer WooSSH Explorer is installed on.',
+  'net.hint': 'Runs on the computer WooSSH is installed on.',
   'net.host': 'Host',
   'net.ping': 'Ping',
   'net.traceroute': 'Traceroute',
@@ -581,8 +581,8 @@ const en = {
   'toast.reconnectGaveUp': 'Could not reconnect to {label}',
 
   /* ----------------------------------------------------------------- boot */
-  'boot.unavailable': 'WooSSH Explorer service unavailable',
-  'boot.starting': 'Starting WooSSH Explorer…',
+  'boot.unavailable': 'WooSSH service unavailable',
+  'boot.starting': 'Starting WooSSH…',
   'boot.hint': 'Start the API with: npm run dev',
   'boot.retry': 'Retry',
   'boot.webBuildMissing': 'The web application was not found.',
@@ -612,7 +612,7 @@ const ru: Dictionary = {
   'common.yes': 'Да',
   'common.no': 'Нет',
 
-  'app.name': 'WooSSH Explorer',
+  'app.name': 'WooSSH',
   'app.tagline': 'Удалённые файлы, не выходя из системы',
   'app.taglineWeb': 'Удалённые файлы, не выходя из браузера',
 
@@ -923,7 +923,7 @@ const ru: Dictionary = {
   'hostkey.fingerprint': 'Отпечаток SHA256',
   'hostkey.trustWrites': 'При доверии ключ будет записан в {path}.',
   'hostkey.trustWritesTail':
-    'Если ключ когда-нибудь изменится, WooSSH Explorer откажет в подключении, а не доверится молча.',
+    'Если ключ когда-нибудь изменится, WooSSH откажет в подключении, а не доверится молча.',
   'hostkey.trust': 'Доверять и продолжить',
 
   'term.reconnect': 'Переподключить',
@@ -1086,7 +1086,7 @@ const ru: Dictionary = {
 
   'net.title': 'Пинг и трассировка',
   'net.subtitle': 'С этого компьютера до хоста — подключение не нужно',
-  'net.hint': 'Выполняется на машине, где установлен WooSSH Explorer.',
+  'net.hint': 'Выполняется на машине, где установлен WooSSH.',
   'net.host': 'Хост',
   'net.ping': 'Пинг',
   'net.traceroute': 'Трассировка',
@@ -1133,8 +1133,8 @@ const ru: Dictionary = {
   'toast.reconnecting': 'Соединение потеряно — переподключаюсь…',
   'toast.reconnectGaveUp': 'Не удалось переподключиться к {label}',
 
-  'boot.unavailable': 'Сервис WooSSH Explorer недоступен',
-  'boot.starting': 'Запуск WooSSH Explorer…',
+  'boot.unavailable': 'Сервис WooSSH недоступен',
+  'boot.starting': 'Запуск WooSSH…',
   'boot.hint': 'Запустите API командой: npm run dev',
   'boot.retry': 'Повторить',
   'boot.webBuildMissing': 'Веб-приложение не найдено.',

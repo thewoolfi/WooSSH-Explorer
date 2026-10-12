@@ -288,7 +288,7 @@ export function AppShell() {
           <span className="boot__icon boot__icon--error">
             <Icon name="plug" size={22} />
           </span>
-          <h1>WooSSH Explorer service unavailable</h1>
+          <h1>WooSSH service unavailable</h1>
           <p>{bootError}</p>
           <p className="boot__hint mono">Start the API with: npm run dev</p>
           <Button variant="primary" icon="refresh" onClick={() => void bootstrap()}>
@@ -304,7 +304,7 @@ export function AppShell() {
       <div className="boot">
         <div className="boot__card boot__card--quiet">
           <Spinner size={22} />
-          <p>Starting WooSSH Explorer…</p>
+          <p>Starting WooSSH…</p>
         </div>
       </div>
     );

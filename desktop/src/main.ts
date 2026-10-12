@@ -86,7 +86,7 @@ function createWindow(url: string): BrowserWindow {
     show: false,
     // Matches the app background so there is no white flash before first paint.
     backgroundColor: '#0A0C10',
-    title: 'WooSSH Explorer',
+    title: 'WooSSH',
     icon: path.join(__dirname, 'icon.png'),
     autoHideMenuBar: true,
     webPreferences: {
@@ -626,20 +626,26 @@ async function waitForEvent(events: string[], state: string, timeoutMs: number):
 /* --------------------------------------------------------------------------- */
 
 /**
- * The product used to be called "SSH Explorer", and Electron derives the user-data
- * directory from that name. Renaming it therefore moves the directory, which would leave
- * every saved host, credential and pinned key behind in the old one — an upgrade would
- * look like a factory reset.
+ * The product has been renamed twice — "SSH Explorer", then "WooSSH Explorer", now
+ * "WooSSH" — and Electron derives the user-data directory from that name. Without this,
+ * each rename moves the directory and leaves every saved host, credential and pinned key
+ * behind in the old one: an upgrade would look like a factory reset.
  *
- * Copied once, before anything reads it. A failure here is not fatal: starting fresh
- * beats refusing to launch.
+ * Newest legacy name first, so the most recent state wins. Copied once, before anything
+ * reads it; a failure here is not fatal, because starting fresh beats refusing to launch.
  */
+const LEGACY_PRODUCT_NAMES = ['WooSSH Explorer', 'SSH Explorer'];
+
 function migrateRenamedUserData(): void {
   try {
     const current = app.getPath('userData');
-    const legacy = path.join(path.dirname(current), 'SSH Explorer');
-    if (current === legacy || existsSync(current) || !existsSync(legacy)) return;
-    cpSync(legacy, current, { recursive: true });
+    if (existsSync(current)) return;
+    for (const name of LEGACY_PRODUCT_NAMES) {
+      const legacy = path.join(path.dirname(current), name);
+      if (legacy === current || !existsSync(legacy)) continue;
+      cpSync(legacy, current, { recursive: true });
+      return;
+    }
   } catch {
     /* the old directory may be locked or unreadable; carry on with a clean one */
   }
@@ -672,8 +678,8 @@ async function main(): Promise<void> {
     const message =
       error instanceof MissingWebBuildError
         ? error.message
-        : `Could not start WooSSH Explorer: ${error instanceof Error ? error.message : String(error)}`;
-    dialog.showErrorBox('WooSSH Explorer', message);
+        : `Could not start WooSSH: ${error instanceof Error ? error.message : String(error)}`;
+    dialog.showErrorBox('WooSSH', message);
     app.exit(1);
     return;
   }
@@ -756,12 +762,12 @@ app.on('will-quit', (event) => {
 });
 
 process.on('uncaughtException', (error) => {
-  dialog.showErrorBox('WooSSH Explorer — unexpected error', error.stack ?? error.message);
+  dialog.showErrorBox('WooSSH — unexpected error', error.stack ?? error.message);
 });
 
 void main().catch((error: unknown) => {
   dialog.showErrorBox(
-    'WooSSH Explorer',
+    'WooSSH',
     `Could not start: ${error instanceof Error ? error.message : String(error)}`,
   );
   app.exit(1);

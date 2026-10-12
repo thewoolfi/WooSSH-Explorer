@@ -2,7 +2,7 @@
   "name": "@ssh-explorer/desktop",
   "version": "1.0.0",
   "private": true,
-  "description": "WooSSH Explorer desktop shell (Electron)",
+  "description": "WooSSH desktop shell (Electron)",
   "author": "Andrew Woolfi | Андрей Павлов",
   "main": "build/main.cjs",
   "scripts": {

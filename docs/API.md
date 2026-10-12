@@ -1,4 +1,4 @@
-# WooSSH Explorer — HTTP / WebSocket API contract (v1)
+# WooSSH — HTTP / WebSocket API contract (v1)
 
 > **Status: FROZEN.** The server implementation (`server/src/**`) and the independent
 > integration test harness (`server/test/**`) are both written against this document.
@@ -160,13 +160,13 @@ Information the UI needs before any connection exists.
   "sshDir": "C:\\Users\\Admin\\.ssh",
   "knownHostsPath": "C:\\Users\\Admin\\.ssh-explorer\\known_hosts",
   "profilesPath": "C:\\Users\\Admin\\.ssh-explorer\\profiles.json",
-  "defaultDownloadDir": "C:\\Users\\Admin\\Downloads\\WooSSH Explorer",
+  "defaultDownloadDir": "C:\\Users\\Admin\\Downloads\\WooSSH",
   "keys": [ { "name": "id_ed25519", "path": "C:\\Users\\Admin\\.ssh\\id_ed25519", "type": "ed25519" } ],
   "secretStorage": {
     "available": true,
     "kind": "os-keychain",          // "os-keychain" | "local-key"
     "label": "Sealed by the operating system keychain (DPAPI on Windows) — bound to your user account",
-    "vaultPath": "C:\\Users\\Admin\\AppData\\Roaming\\WooSSH Explorer\\secrets.json"
+    "vaultPath": "C:\\Users\\Admin\\AppData\\Roaming\\WooSSH\\secrets.json"
   }
 }
 ```
@@ -504,7 +504,7 @@ Environment variables read once at startup:
 | `SSH_EXPLORER_PORT` | `5178` | HTTP/WS port |
 | `SSH_EXPLORER_HOST` | `127.0.0.1` | bind address (never default to `0.0.0.0`) |
 | `SSH_EXPLORER_HOME` | `~/.ssh-explorer` | state directory (contains `known_hosts`, `profiles.json`, `secrets.json`, `secret.key`) |
-| `SSH_EXPLORER_DOWNLOAD_DIR` | `~/Downloads/WooSSH Explorer` | default download destination |
+| `SSH_EXPLORER_DOWNLOAD_DIR` | `~/Downloads/WooSSH` | default download destination |
 | `SSH_EXPLORER_STATIC` | `web/dist` when it exists | directory of the built web app to serve |
 | `SSH_EXPLORER_LOG_LEVEL` | `info` | `silent` \| `error` \| `warn` \| `info` \| `debug` |
 | `SSH_EXPLORER_TOKEN` | **generated** | when set, used as the shared secret. When unset the server generates one and prints `http://host:port/?token=…` on startup, so the app can still be opened with one click |

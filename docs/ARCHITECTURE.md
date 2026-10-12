@@ -1,6 +1,6 @@
-# WooSSH Explorer — architecture
+# WooSSH — architecture
 
-WooSSH Explorer puts a modern, desktop-class file browser in front of **SFTP**, an
+WooSSH puts a modern, desktop-class file browser in front of **SFTP**, an
 integrated **PTY terminal** in front of the SSH shell channel, and keeps both honest
 about host identity. It ships as an **Electron desktop application** and as a plain web
 app from the same UI bundle.
@@ -29,7 +29,7 @@ app from the same UI bundle.
 ## Desktop shell
 
 ```
-┌──────────────────── WooSSH Explorer.exe (Electron main) ────────────────────┐
+┌──────────────────── WooSSH.exe (Electron main) ────────────────────┐
 │  menu bar (File/Edit/View/Connection/Tools/Help)                          │
 │  BrowserWindow ── loads http://127.0.0.1:<ephemeral>/                     │
 │  preload.cjs ── contextBridge: menu actions, download events, reveal      │

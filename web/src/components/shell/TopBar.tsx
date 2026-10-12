@@ -55,7 +55,7 @@ export function TopBar() {
         <span className="brand__mark" aria-hidden="true">
           <Icon name="terminal" size={16} strokeWidth={1.35} />
         </span>
-        <span className="brand__name">WooSSH Explorer</span>
+        <span className="brand__name">WooSSH</span>
       </div>
 
       <div className="topbar__connection">
