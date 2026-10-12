@@ -1,4 +1,4 @@
-import { useConnectionStore } from '../../state/connectionStore';
+﻿import { useConnectionStore } from '../../state/connectionStore';
 import { useExplorerStore, visibleEntries, type FilesTab } from '../../state/explorerStore';
 import { useTransferStore, activeTransfers, totalSpeed } from '../../state/transferStore';
 import { useUiStore } from '../../state/uiStore';
@@ -9,6 +9,7 @@ import { StatusDot } from '../ui/Primitives';
 import { formatBytes, formatSpeed } from '../../lib/format';
 import { useT } from '../../i18n/useT';
 import { openExternalLink } from '../../lib/desktop';
+import { actOnUpdate } from '../../lib/updates';
 
 /** Where "support the project" leads, kept in one place so it is easy to change. */
 const SUPPORT_URL = 'https://boosty.to/andrewwoolfi';
@@ -30,6 +31,7 @@ export function StatusBar() {
   const setDockView = useUiStore((s) => s.setDockView);
   const setServerStatsOpen = useUiStore((s) => s.setServerStatsOpen);
   const setNetToolsOpen = useUiStore((s) => s.setNetToolsOpen);
+  const update = useUiStore((s) => s.update);
   const showHidden = useUiStore((s) => s.showHidden);
   const setShowHidden = useUiStore((s) => s.setShowHidden);
   const stats = useSystemStatsStore((s) => (activeId ? s.byConnection[activeId]?.stats : undefined));
@@ -160,6 +162,39 @@ export function StatusBar() {
       </div>
 
       <div className="statusbar__right">
+        {/* An update waiting for a restart has to survive a glance away, so it lives here
+            rather than in a toast that clears itself after five seconds. */}
+        {update.phase === 'available' ? (
+          <button
+            type="button"
+            className="statusbar__toggle statusbar__toggle--update"
+            onClick={() => void actOnUpdate()}
+            title={update.canInstall ? t('update.download') : t('update.open')}
+          >
+            <Icon name="download" size={12} />
+            <span>{t('update.available', { version: update.version ?? '' })}</span>
+            <span className="statusbar__badge">
+              {update.canInstall ? t('update.download') : t('update.open')}
+            </span>
+          </button>
+        ) : null}
+        {update.phase === 'downloading' ? (
+          <span className="statusbar__toggle statusbar__toggle--update is-busy">
+            <Icon name="download" size={12} />
+            <span>{t('update.downloading', { percent: String(Math.round(update.percent)) })}</span>
+          </span>
+        ) : null}
+        {update.phase === 'ready' ? (
+          <button
+            type="button"
+            className="statusbar__toggle statusbar__toggle--update is-ready"
+            onClick={() => void actOnUpdate()}
+          >
+            <Icon name="check-circle" size={12} />
+            <span>{t('update.ready', { version: update.version ?? '' })}</span>
+            <span className="statusbar__badge">{t('update.restart')}</span>
+          </button>
+        ) : null}
         {/* Always in reach, never in the way; opens outside the app. */}
         <button
           type="button"

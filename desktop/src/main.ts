@@ -2,6 +2,7 @@ import path from 'node:path';
 import { cpSync, existsSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import { createServer, type RunningServer } from '@ssh-explorer/server-runtime';
 import { buildMenu, sendToFocused, type MenuAction } from './menu';
 import { resolveSecretBox } from './secretBox';
@@ -626,6 +627,62 @@ async function waitForEvent(events: string[], state: string, timeoutMs: number):
 /* --------------------------------------------------------------------------- */
 
 /**
+ * Self-updating for the installed build.
+ *
+ * Deliberately not automatic: the download starts when the user says so, and the install
+ * happens on the next quit. An update that replaces the application while someone is
+ * mid-transfer is a worse outcome than being one version behind for a day.
+ *
+ * Nothing here is attempted in an unpackaged run — there is no `latest.yml` to read, and
+ * `checkForUpdates` would simply throw.
+ */
+function installAutoUpdate(): void {
+  if (!app.isPackaged) return;
+
+  autoUpdater.autoDownload = false;
+  // If a download did complete, applying it on the way out is what the user asked for.
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  const send = (payload: Record<string, unknown>): void => {
+    mainWindow?.webContents.send('desktop:update-event', payload);
+  };
+
+  autoUpdater.on('update-available', (info) => send({ type: 'available', version: info.version }));
+  autoUpdater.on('update-not-available', () => send({ type: 'none' }));
+  autoUpdater.on('download-progress', (progress) =>
+    send({ type: 'progress', percent: progress.percent }),
+  );
+  autoUpdater.on('update-downloaded', (info) => send({ type: 'ready', version: info.version }));
+  autoUpdater.on('error', (error) => send({ type: 'error', message: error.message }));
+
+  ipcMain.handle('desktop:update-check', async () => {
+    try {
+      const result = await autoUpdater.checkForUpdates();
+      return { supported: true, version: result?.updateInfo.version ?? null };
+    } catch (error) {
+      // No network, no release yet, no publish config — the caller falls back to the
+      // server's release check, which needs none of those.
+      return { supported: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle('desktop:update-download', async () => {
+    try {
+      await autoUpdater.downloadUpdate();
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  ipcMain.handle('desktop:update-install', () => {
+    // `isSilent: false` so the installer's own window shows; `isForceRunAfter` brings the
+    // application back once it finishes.
+    autoUpdater.quitAndInstall(false, true);
+  });
+}
+
+/**
  * The product has been renamed twice — "SSH Explorer", then "WooSSH Explorer", now
  * "WooSSH" — and Electron derives the user-data directory from that name. Without this,
  * each rename moves the directory and leaves every saved host, credential and pinned key
@@ -718,6 +775,7 @@ async function main(): Promise<void> {
 
   installDownloadHandler(paths.downloadDir);
   installIpc(paths);
+  installAutoUpdate();
 
   mainWindow = createWindow(windowUrl(server.url));
 

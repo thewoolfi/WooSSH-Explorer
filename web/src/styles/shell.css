@@ -1330,3 +1330,25 @@ body.is-resizing * {
 .menu__item.is-selected { color: var(--text); }
 .menu__item.is-selected .menu__icon { color: var(--accent); }
 .menu__check { margin-left: auto; display: inline-flex; color: var(--accent); }
+
+/* A newer release, waiting. Deliberately the loudest thing in the bar: it is the only
+   item there that asks the user to do something. */
+.statusbar__toggle--update {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.statusbar__toggle--update:hover { background: var(--surface-2); }
+.statusbar__toggle--update.is-busy { opacity: 0.75; cursor: default; }
+.statusbar__toggle--update.is-ready { border-color: var(--accent); background: var(--surface-2); }
+
+.statusbar__badge {
+  margin-left: var(--sp-2);
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-xs);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}

@@ -13,6 +13,21 @@ export const INSPECTOR_MIN_WIDTH = 240;
 export const INSPECTOR_MAX_WIDTH = 680;
 export const INSPECTOR_DEFAULT_WIDTH = 292;
 
+/**
+ * Where the application stands with respect to a newer release.
+ *
+ * A toast would not do: it disappears after five seconds, and an update that waits for a
+ * restart is exactly the kind of notice someone needs to find an hour later.
+ */
+export type UpdatePhase =
+  | { phase: 'idle' }
+  | { phase: 'checking' }
+  /** Newer release exists. `canInstall` is false for the portable build and the browser. */
+  | { phase: 'available'; version: string | null; canInstall: boolean; url: string | null }
+  | { phase: 'downloading'; version: string | null; percent: number }
+  | { phase: 'ready'; version: string | null }
+  | { phase: 'error'; message: string };
+
 export interface Toast {
   id: string;
   level: 'info' | 'success' | 'warn' | 'error';
@@ -23,8 +38,7 @@ export interface Toast {
   createdAt: number;
 }
 
-export interface ConnectionDialogState {
-  open: boolean;
+export interface ConnectionDialogState {  open: boolean;
   profile: SavedProfile | null;
   host?: string;
   username?: string;
@@ -51,6 +65,8 @@ interface UiState {
   serverStatsOpen: boolean;
   /** The per-host probe report. */
   diagnosticsOpen: boolean;
+  /** Newer-release state; see {@link UpdatePhase}. */
+  update: UpdatePhase;
   /** Ping / traceroute from this machine to a host. */
   netToolsOpen: boolean;
   /** Host the tools open on; the sidebar passes the row's host. */
@@ -79,6 +95,7 @@ interface UiState {
   setKnownHostsOpen: (open: boolean) => void;
   setServerStatsOpen: (open: boolean) => void;
   setDiagnosticsOpen: (open: boolean) => void;
+  setUpdate: (next: UpdatePhase) => void;
   setNetToolsOpen: (open: boolean, host?: string | null, tool?: 'ping' | 'traceroute') => void;
   /** True while a modal owns the screen; global shortcuts stand down. */
   anyOverlayOpen: () => boolean;
@@ -166,6 +183,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   knownHostsOpen: false,
   serverStatsOpen: false,
   diagnosticsOpen: false,
+  update: { phase: 'idle' },
   netToolsOpen: false,
   netToolsHost: null,
   netToolsTool: 'ping',
@@ -252,6 +270,8 @@ export const useUiStore = create<UiState>((set, get) => ({
   setServerStatsOpen: (open) => set({ serverStatsOpen: open }),
 
   setDiagnosticsOpen: (open) => set({ diagnosticsOpen: open }),
+
+  setUpdate: (next) => set({ update: next }),
 
   setNetToolsOpen: (open, host, tool) =>
     set((s) => ({

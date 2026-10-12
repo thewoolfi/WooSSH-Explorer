@@ -42,3 +42,11 @@ nsis:
 portable:
   artifactName: ${productName}-Portable-${version}.${ext}
   requestExecutionLevel: user
+
+# Where releases live. electron-updater reads the latest.yml this produces, so a
+# published release is what makes an installed build able to update itself.
+publish:
+  provider: github
+  owner: thewoolfi
+  repo: WooSSH-Explorer
+  releaseType: release

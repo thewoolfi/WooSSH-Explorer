@@ -33,6 +33,19 @@ export interface EditHandle {
   localPath: string;
 }
 
+/**
+ * A change in the update state, forwarded from the desktop shell.
+ *
+ * `available` carries a version and waits for the user to ask for the download; `ready`
+ * means the bytes are on disk and a restart will install them.
+ */
+export interface UpdateEvent {
+  type: 'available' | 'none' | 'progress' | 'ready' | 'error';
+  version?: string;
+  percent?: number;
+  message?: string;
+}
+
 interface DesktopBridge {
   readonly isDesktop: true;
   readonly platform: string;
@@ -63,6 +76,12 @@ interface DesktopBridge {
   }>;
   /** Opens a folder or file with the OS default handler. */
   openPath(path: string): Promise<void>;
+
+  /* ---- self-update, present only in the installed desktop build ---- */
+  updateCheck?(): Promise<{ supported: boolean; version?: string | null; error?: string }>;
+  updateDownload?(): Promise<{ ok: boolean; error?: string }>;
+  updateInstall?(): Promise<void>;
+  onUpdateEvent?(handler: (event: UpdateEvent) => void): () => void;
   editOpen(request: {
     connectionId: string;
     remotePath: string;
@@ -147,6 +166,35 @@ export function openExternalLink(url: string): void {
 export function openWithOs(path: string): void {
   void (desktopBridge as { openPath?: (value: string) => Promise<void> } | null)?.openPath?.(path);
 }
+
+/**
+ * The self-update channel, when there is one.
+ *
+ * The installed desktop build has `electron-updater` behind these calls and can download
+ * and apply an update itself. The portable build and the browser have none of that, so
+ * the callers fall back to asking the server whether a newer release exists and sending
+ * the user to the release page.
+ */
+export const updateBridge = {
+  get available(): boolean {
+    return typeof desktopBridge?.updateCheck === 'function';
+  },
+  async check(): Promise<{ supported: boolean; version?: string | null; error?: string }> {
+    if (typeof desktopBridge?.updateCheck !== 'function') return { supported: false };
+    return desktopBridge.updateCheck();
+  },
+  async download(): Promise<{ ok: boolean; error?: string }> {
+    if (typeof desktopBridge?.updateDownload !== 'function') return { ok: false };
+    return desktopBridge.updateDownload();
+  },
+  async install(): Promise<void> {
+    await desktopBridge?.updateInstall?.();
+  },
+  onEvent(handler: (event: UpdateEvent) => void): () => void {
+    if (typeof desktopBridge?.onUpdateEvent !== 'function') return () => undefined;
+    return desktopBridge.onUpdateEvent(handler);
+  },
+};
 
 export async function desktopInfo(): Promise<{
   version: string;

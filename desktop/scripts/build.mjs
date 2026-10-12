@@ -27,7 +27,18 @@ const shared = {
   logLevel: 'warning',
   // `electron` is provided by the runtime; the rest are optional native add-ons
   // that their libraries probe for and tolerate the absence of.
-  external: ['electron', 'cpu-features', 'sshcrypto', 'bufferutil', 'utf-8-validate'],
+  //
+  // `electron-updater` stays external on purpose: it resolves its own provider modules
+  // and `app-update.yml` relative to its real location, and a bundled copy looks for
+  // them in the wrong place. It ships as a production dependency instead.
+  external: [
+    'electron',
+    'electron-updater',
+    'cpu-features',
+    'sshcrypto',
+    'bufferutil',
+    'utf-8-validate',
+  ],
   alias: { '@ssh-explorer/server-runtime': serverEntry },
   define: {
     'process.env.NODE_ENV': '"production"',

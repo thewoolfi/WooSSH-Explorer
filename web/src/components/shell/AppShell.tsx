@@ -1,4 +1,4 @@
-import { useEffect, lazy, Suspense, useRef, useState } from 'react';
+﻿import { useEffect, lazy, Suspense, useRef, useState } from 'react';
 import { useConnectionStore } from '../../state/connectionStore';
 import { useExplorerStore } from '../../state/explorerStore';
 import { useTransferStore } from '../../state/transferStore';
@@ -8,6 +8,7 @@ import { eventBus } from '../../state/eventBus';
 import { api } from '../../api/client';
 import { useHotkey } from '../../lib/hooks';
 import { useT } from '../../i18n/useT';
+import { useUpdateWatch } from '../../lib/updates';
 import { onDownloadDone, onMenuAction, revealInFileManager, desktopInfo, isDesktop } from '../../lib/desktop';
 import { TopBar } from './TopBar';
 import { Sidebar } from './Sidebar';
@@ -153,6 +154,9 @@ export function AppShell() {
 
   /* ------------------------------------------- edit-in-default-app events */
   useEffect(() => useEditStore.getState().attach(), []);
+
+  /* ------------------------------------------------------ newer releases */
+  const { checkNow } = useUpdateWatch();
 
   /* ------------------------------------------- open a tab once connected */
   const activeConnection = connections.find((c) => c.id === activeConnectionId) ?? null;

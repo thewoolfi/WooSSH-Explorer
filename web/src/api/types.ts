@@ -159,6 +159,19 @@ export interface RemoteSystemStats {  collectedAt: number;
   notes: { scope: string; detail: string }[];
 }
 
+/** Answer to `GET /api/update-check`: is there a newer release than this one? */
+export interface UpdateCheckResult {
+  current: string;
+  latest: string | null;
+  hasUpdate: boolean;
+  url: string | null;
+  publishedAt: string | null;
+  releaseName: string | null;
+  /** Set when the check itself could not run; never a reason to interrupt anyone. */
+  error: string | null;
+  checkedAt: number;
+}
+
 export interface DiagnosticCheck {
   name: string;
   command: string;

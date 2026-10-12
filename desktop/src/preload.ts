@@ -1,5 +1,18 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+/**
+ * A change in the update state, forwarded from `electron-updater`.
+ *
+ * `available` carries a version and waits for the user to ask for the download; `ready`
+ * means the bytes are on disk and a restart will install them.
+ */
+export interface UpdateEvent {
+  type: 'available' | 'none' | 'progress' | 'ready' | 'error';
+  version?: string;
+  percent?: number;
+  message?: string;
+}
+
 /** A change detected in a file that was opened for editing (see `editSession.ts`). */
 export interface EditEventPayload {
   sessionId: string;
@@ -41,6 +54,12 @@ export interface DesktopBridge {
   reveal(path: string): Promise<void>;
   /** Opens a folder or file with the OS default handler. */
   openPath(path: string): Promise<void>;
+
+  /* ---- self-update, installed build only ---- */
+  updateCheck(): Promise<{ supported: boolean; version?: string | null; error?: string }>;
+  updateDownload(): Promise<{ ok: boolean; error?: string }>;
+  updateInstall(): Promise<void>;
+  onUpdateEvent(handler: (event: UpdateEvent) => void): () => void;
   /** Opens http(s) links in the user's browser. */
   openExternal(url: string): Promise<void>;
   info(): Promise<{
@@ -103,6 +122,21 @@ const bridge: DesktopBridge = {
   reveal: (path) => ipcRenderer.invoke('desktop:reveal', path) as Promise<void>,
   openPath: (path) => ipcRenderer.invoke('desktop:open-path', path) as Promise<void>,
   openExternal: (url) => ipcRenderer.invoke('desktop:open-external', url) as Promise<void>,
+
+  updateCheck: () =>
+    ipcRenderer.invoke('desktop:update-check') as Promise<{
+      supported: boolean;
+      version?: string | null;
+      error?: string;
+    }>,
+  updateDownload: () =>
+    ipcRenderer.invoke('desktop:update-download') as Promise<{ ok: boolean; error?: string }>,
+  updateInstall: () => ipcRenderer.invoke('desktop:update-install') as Promise<void>,
+  onUpdateEvent(handler) {
+    const listener = (_event: unknown, payload: UpdateEvent): void => handler(payload);
+    ipcRenderer.on('desktop:update-event', listener);
+    return () => ipcRenderer.removeListener('desktop:update-event', listener);
+  },
   info: () =>
     ipcRenderer.invoke('desktop:info') as Promise<
       DesktopBridge['info'] extends () => Promise<infer R> ? R : never

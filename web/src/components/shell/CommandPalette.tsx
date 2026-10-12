@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useConnectionStore } from '../../state/connectionStore';
 import { useExplorerStore } from '../../state/explorerStore';
@@ -10,6 +10,7 @@ import { normalizeRemotePath } from '../../lib/path';
 import { useT } from '../../i18n/useT';
 import { setLocale } from '../../i18n';
 import { desktopInfo, openWithOs } from '../../lib/desktop';
+import { runUpdateCheck } from '../../lib/updates';
 
 interface Command {
   id: string;
@@ -259,6 +260,13 @@ export function CommandPalette() {
       },
       // The native menu used to hold these; on Windows and Linux it is gone, because the
       // system draws it and it cannot be themed to match the application.
+      {
+        id: 'check-updates',
+        label: t('update.check'),
+        icon: 'download',
+        group: 'Actions',
+        run: () => void runUpdateCheck(),
+      },
       {
         id: 'open-downloads',
         label: t('palette.openDownloads'),

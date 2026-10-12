@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   AppSettings,
   ArchiveFormat,
   ConnectRequest,
@@ -12,6 +12,7 @@ import type {
   HealthInfo,
   KnownHostEntry,
   NetProbeResult,
+  UpdateCheckResult,
   RelayStart,
   RemoteSystemStats,
   SavedProfile,
@@ -252,6 +253,10 @@ export const api = {
   /** What this host can actually do; the answer to "why is the panel empty". */
   diagnostics: (id: string) =>
     request<DiagnosticReport>(`/connections/${encodeURIComponent(id)}/diagnostics`),
+
+  /** Is there a newer release than the one running? */
+  updateCheck: (force = false) =>
+    request<UpdateCheckResult>(`/update-check${force ? '?force=true' : ''}`),
 
   knownHosts: () => request<{ path: string; entries: KnownHostEntry[] }>('/known-hosts'),
 
