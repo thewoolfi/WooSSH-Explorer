@@ -1,12 +1,6 @@
 {
   "url": "http://127.0.0.1:5178",
-  "capturedAt": "2026-10-12T06:48:16.487Z",
+  "capturedAt": "2026-10-12T07:41:29.286Z",
   "problems": [],
-  "expected": [
-    {
-      "label": "main",
-      "kind": "console.error",
-      "text": "Failed to load resource: the server responded with a status of 409 (Conflict)"
-    }
-  ]
+  "expected": []
 }

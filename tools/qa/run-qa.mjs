@@ -742,6 +742,45 @@ async function main() {
         await page.keyboard.press('Escape');
         await page.waitForTimeout(300);
       }
+      // The keyboard must travel with the highlight: arrow keys are handled on the pane
+      // element, so a Tab press that moves the highlight without moving the focus leaves
+      // the arrows driving the pane the user just left.
+      await page.keyboard.press('Tab');
+      await page.waitForTimeout(700);
+      const focusIn = await page.evaluate(() =>
+        [...document.querySelectorAll('.fpane')]
+          .filter((p) => p.getBoundingClientRect().width > 1)
+          .findIndex((p) => p.contains(document.activeElement)),
+      );
+      if (focusIn < 0) {
+        problems.push({
+          label: 'split',
+          kind: 'no-keyboard-focus',
+          text: 'no pane holds the keyboard focus after Tab, so the arrows cannot work',
+        });
+      } else {
+        const moved = await page.evaluate((index) => {
+          const panes = [...document.querySelectorAll('.fpane')].filter(
+            (p) => p.getBoundingClientRect().width > 1,
+          );
+          const before = panes.map((p) => p.querySelector('.frow.is-selected')?.getAttribute('data-path') ?? null);
+          return { before, index };
+        }, focusIn);
+        await page.keyboard.press('ArrowDown');
+        await page.waitForTimeout(500);
+        const after = await page.evaluate(() =>
+          [...document.querySelectorAll('.fpane')]
+            .filter((p) => p.getBoundingClientRect().width > 1)
+            .map((p) => p.querySelector('.frow.is-selected')?.getAttribute('data-path') ?? null),
+        );
+        if (after[moved.index] === null) {
+          problems.push({
+            label: 'split',
+            kind: 'arrows-inert',
+            text: 'an arrow press in the focused pane selected nothing',
+          });
+        }
+      }
       await shoot(page, '53-split-panes');
 
       // Leaving split view returns to a single pane.

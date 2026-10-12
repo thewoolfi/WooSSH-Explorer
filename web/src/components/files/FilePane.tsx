@@ -11,6 +11,7 @@ import { useT } from '../../i18n/useT';
 import { filterEntries, nextSort, sortEntries, type SortKey } from '../../lib/sort';
 import { basenameRemotePath, joinRemotePath, parentRemotePath } from '../../lib/path';
 import { formatCount } from '../../lib/format';
+import { isTextTarget } from '../../lib/hooks';
 import { downloadWithResume, isDesktop } from '../../lib/desktop';
 import {
   clipboardAsText,
@@ -359,14 +360,46 @@ export function FilePane({ tabId }: { tabId: string }) {
   /* ------------------------------------------------- focus for hotkeys -- */
 
   const paneRef = useRef<HTMLDivElement | null>(null);
+  const isActivePane = useExplorerStore((s) => s.activeTabId === tabId);
+  const splitOpen = useExplorerStore((s) => s.split !== null);
+  /**
+   * Whether a dialog is on top of this pane.
+   *
+   * Subscribed to rather than probed: the pane mounts while the connection dialog is still
+   * closing, and a fixed number of retry frames expires before that dialog goes away — so
+   * the focus was abandoned exactly in the case that matters, the pane opened by connecting.
+   */
+  const blocked = useUiStore(
+    (s) => s.connectionDialog.open || s.hostKeyChallenge !== null || s.commandPaletteOpen,
+  );
 
-  // Keyboard shortcuts (F2, Delete, arrows) only reach the pane when it holds
-  // focus, so the pane takes focus when a tab is opened and on any click that is
-  // not on a form control.
+  // Keyboard shortcuts (F2, Delete, arrows) are handled on the pane element, so they only
+  // reach the pane that holds focus. The active pane therefore takes focus: on mount, when
+  // Tab moves between split panes, and when another tab becomes active. Taking it only on
+  // mount — which is what this used to do — left the arrows driving the pane the user had
+  // just left, because a Tab press moved the highlight without moving the focus.
   useEffect(() => {
-    const id = window.requestAnimationFrame(() => paneRef.current?.focus({ preventScroll: true }));
-    return () => window.cancelAnimationFrame(id);
-  }, [tabId]);
+    if (!isActivePane || blocked) return;
+    let frame = 0;
+    let attempts = 0;
+
+    const takeFocus = (): void => {
+      // Menus and the palette are transient; a few frames is enough for them to go.
+      if (document.querySelector('.menu, .palette') !== null) {
+        if (attempts < 20) {
+          attempts += 1;
+          frame = window.requestAnimationFrame(takeFocus);
+        }
+        return;
+      }
+      // Somewhere real is being typed into; leaving it alone is the whole point.
+      if (isTextTarget(document.activeElement)) return;
+      paneRef.current?.focus({ preventScroll: true });
+    };
+
+    frame = window.requestAnimationFrame(takeFocus);
+    return () => window.cancelAnimationFrame(frame);
+  }, [isActivePane, blocked, splitOpen, tabId]);
 
   /* ------------------------------------------------------------ clipboard -- */
 
