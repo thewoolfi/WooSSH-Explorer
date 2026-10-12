@@ -1,4 +1,4 @@
-﻿/* ============================================================================
+/* ============================================================================
    App shell: grid, top bar, sidebar, tab strip, workbench, dock, status bar.
    Layout mirrors the accepted concept:
      [ topbar ]
@@ -1194,23 +1194,14 @@ body.is-resizing * {
 
 /* ------------------------------------------------------------- split view --
  * Two panes side by side, as a two-panel file manager has them. Every tab stays mounted;
- * this only decides how many of them are on screen at once.
+ * this only decides how many of them are on screen at once. The per-pane rules live
+ * further down, next to the pane header they belong to.
  */
 .workbench__content.is-split {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1px;
   background: var(--line);
-}
-
-.workbench__content.is-split .workbench__view {
-  min-width: 0;
-  background: var(--surface-1);
-}
-
-/* The focused pane says so; without it there is no way to tell where Tab will go. */
-.workbench__content.is-split .workbench__view.is-focused {
-  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 /* --------------------------------------------------------- pane identity ---
@@ -1246,8 +1237,11 @@ body.is-resizing * {
 }
 
 .pane-head__name {
-  flex: none;
-  max-width: 45%;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-weight: 500;
   color: var(--text-dim);
 }
@@ -1267,17 +1261,30 @@ body.is-resizing * {
   text-transform: uppercase;
 }
 
-/* The focused pane is outlined, and its content area fills what the header leaves. */
-.workbench__content.is-split .workbench__view {
+/*
+ * The focused pane is outlined, and its content area fills what the header leaves.
+ *
+ * `:not([hidden])` is load-bearing. This rule is more specific than
+ * `.workbench__view[hidden] { display: none }`, so without the guard it *overrode* the
+ * hidden attribute and every tab stayed on screen as a grid item: switching tabs in split
+ * mode left the previous pane visible, its toolbar and all, and three tabs produced three
+ * panes in a wrapping grid. Author styles beat the browser's `[hidden]` rule whatever the
+ * specificity, so hiding has to be spelled out here as well.
+ */
+.workbench__content.is-split .workbench__view:not([hidden]) {
   display: flex;
   flex-direction: column;
   min-width: 0;
   background: var(--surface-1);
 }
 
-.workbench__content.is-split .workbench__view > *:last-child {
+.workbench__content.is-split .workbench__view:not([hidden]) > *:last-child {
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.workbench__content.is-split .workbench__view[hidden] {
+  display: none;
 }
 
 .workbench__content.is-split .workbench__view.is-focused {
@@ -1292,3 +1299,34 @@ body.is-resizing * {
 /* Support: visible, quiet, and clearly not part of the working UI. */
 .statusbar__toggle--support .icon { color: var(--rose); }
 .statusbar__toggle--support:hover { color: var(--rose); }
+
+/* The pane name doubles as the control that chooses this pane's tab. */
+.pane-head__choose {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  /* The name gives way only when the path genuinely needs the room, instead of being
+     squeezed to an ellipsis the moment the pane is narrow. */
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 2px var(--sp-3);
+  margin-left: calc(var(--sp-2) * -1);
+  border: 1px solid transparent;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pane-head__choose:hover {
+  border-color: var(--line);
+  background: var(--surface-1);
+  color: var(--text);
+}
+
+.pane-head__choose .icon { flex: none; opacity: 0.7; }
+
+.menu__item.is-selected { color: var(--text); }
+.menu__item.is-selected .menu__icon { color: var(--accent); }
+.menu__check { margin-left: auto; display: inline-flex; color: var(--accent); }

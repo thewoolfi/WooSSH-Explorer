@@ -94,6 +94,11 @@ interface ExplorerState {
   toggleSplit: () => void;
   /** Moves focus to the other pane; a no-op outside split mode. */
   focusOtherPane: () => void;
+  /**
+   * Puts a chosen tab into one of the panes. Choosing the tab that already fills the
+   * other pane swaps the two, because the same tab cannot be in both.
+   */
+  setPaneTab: (side: 'left' | 'right', tabId: string) => void;
   /** Next (`+1`) or previous (`-1`) tab, wrapping around. */
   cycleTab: (delta: number) => void;
   setViewMode: (id: string, mode: ViewMode) => void;
@@ -183,6 +188,14 @@ function toMessage(error: unknown): string {
   return String(error);
 }
 
+/**
+ * Splitting pairs the focused tab with the next open one.
+ *
+ * The focused tab stays on the left, which is where it already was, so splitting does not
+ * appear to move anything. Which pane a tab sits in is decided here and nowhere else: the
+ * view follows this model rather than the order of the strip, or "put this tab in the left
+ * pane" would quietly do nothing whenever the tab happened to be later in the list.
+ */
 export const useExplorerStore = create<ExplorerState>((set, get) => ({
   tabs: [],
   activeTabId: null,
@@ -324,7 +337,10 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
     const previousId = active.id;
     // `openFilesTab` focuses the tab it creates, so the original pane is re-focused after.
     const createdId = get().openFilesTab(connectionId, path, { force: true });
-    set({ activeTabId: previousId, split: { leftId: previousId, rightId: createdId } });
+    set({
+      activeTabId: previousId,
+      split: { leftId: previousId, rightId: createdId },
+    });
   },
 
   focusOtherPane: () =>
@@ -338,6 +354,24 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
         if (connection.activeId !== tab.connectionId) connection.setActive(tab.connectionId);
       }
       return { activeTabId: next };
+    }),
+
+  setPaneTab: (side, tabId) =>
+    set((s) => {
+      const split = s.split;
+      if (!split) return s;
+      if (!s.tabs.some((tab) => tab.id === tabId)) return s;
+
+      const otherId = side === 'left' ? split.rightId : split.leftId;
+      if (tabId === otherId) {
+        // Both panes would show the same tab, and a tab cannot be in two places, so the
+        // pair trades places — which is what "put that one here" means in a two-pane view.
+        return { split: { leftId: split.rightId, rightId: split.leftId }, activeTabId: tabId };
+      }
+      return {
+        split: side === 'left' ? { ...split, leftId: tabId } : { ...split, rightId: tabId },
+        activeTabId: tabId,
+      };
     }),
 
   cycleTab: (delta) =>

@@ -25,6 +25,7 @@ import { EditPromptDialog } from '../files/EditPromptDialog';
 import { TransferDock, TransferView } from '../transfers/Transfers';
 import { Button, Spinner } from '../ui/Primitives';
 import { Icon } from '../ui/Icon';
+import { Menu } from '../ui/Overlays';
 
 // xterm is only needed once a terminal tab exists, so it is fetched on demand.
 const TerminalPane = lazy(() =>
@@ -41,6 +42,7 @@ export function AppShell() {
   const tabs = useExplorerStore((s) => s.tabs);
   const activeTabId = useExplorerStore((s) => s.activeTabId);
   const split = useExplorerStore((s) => s.split);
+  const setPaneTab = useExplorerStore((s) => s.setPaneTab);
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
   const openFilesTab = useExplorerStore((s) => s.openFilesTab);
   const refresh = useExplorerStore((s) => s.refresh);
@@ -325,9 +327,14 @@ export function AppShell() {
               // In split mode two tabs are on screen at once; otherwise just the active one.
               // Every tab stays mounted either way, so a terminal keeps its scrollback and
               // a folder keeps its listing while it is out of sight.
-              const visible = split
-                ? tab.id === split.leftId || tab.id === split.rightId
-                : tab.id === activeTabId;
+              const paneSide = split
+                ? tab.id === split.leftId
+                  ? 'left'
+                  : tab.id === split.rightId
+                    ? 'right'
+                    : null
+                : null;
+              const visible = split ? paneSide !== null : tab.id === activeTabId;
               return (
                 <div
                   key={tab.id}
@@ -336,12 +343,20 @@ export function AppShell() {
                   }`}
                   hidden={!visible}
                   aria-hidden={!visible}
+                  // The grid fills in document order, so the pane a tab occupies is decided
+                  // here rather than by where the tab happens to sit in the strip.
+                  style={paneSide === null ? undefined : { order: paneSide === 'left' ? 0 : 1 }}
                 >
                   {split ? (
                     <PaneHeader
                       tab={tab}
+                      side={tab.id === split.leftId ? 'left' : 'right'}
                       focused={tab.id === activeTabId}
                       connection={connections.find((c) => c.id === tab.connectionId) ?? null}
+                      tabs={tabs}
+                      onPickTab={(tabId) =>
+                        setPaneTab(tab.id === split.leftId ? 'left' : 'right', tabId)
+                      }
                     />
                   ) : null}
                   {tab.kind === 'files' ? <FilePane tabId={tab.id} /> : null}
@@ -381,22 +396,31 @@ export function AppShell() {
 }
 
 /**
- * Which host a split pane is looking at, and whether it is the focused one.
+ * Which host a split pane is looking at, which tab fills it, and whether it has the focus.
  *
  * Two panes side by side are only useful if you can tell them apart at a glance: the
- * colour is the same tag the sidebar and the tab dots use, and the name is what the user
- * called the connection. Without it, the only clue was the folder path.
+ * colour is the same tag the sidebar and the tab dots use, so a pane reads as belonging
+ * to a host rather than being an anonymous list. The name doubles as the control that
+ * decides *which* tab sits in this pane — the alternative was dragging tabs across a
+ * divider, which is a lot of machinery for a two-pane layout.
  */
 function PaneHeader({
   tab,
+  side,
   focused,
   connection,
+  tabs,
+  onPickTab,
 }: {
-  tab: { kind: string; title?: string; path?: string; connectionId: string | null };
+  tab: { id: string; kind: string; title?: string; path?: string; connectionId: string | null };
+  side: 'left' | 'right';
   focused: boolean;
   connection: { label: string; color?: string | null; host: string; port: number } | null;
+  tabs: { id: string; kind: string; title?: string; path?: string }[];
+  onPickTab: (tabId: string) => void;
 }) {
   const { t } = useT();
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const colour = connection?.color ?? 'slate';
   const name = connection?.label ?? t('pane.noConnection');
   const detail =
@@ -404,14 +428,48 @@ function PaneHeader({
       ? tab.path
       : (tab.title ?? connection?.host ?? '');
 
+  const label = (candidate: { kind: string; title?: string; path?: string }): string => {
+    if (candidate.kind === 'files') return candidate.path ?? '/';
+    if (candidate.kind === 'transfers') return t('tabs.transferManager');
+    return candidate.title ?? candidate.kind;
+  };
+
   return (
-    <div className={`pane-head${focused ? ' is-focused' : ''}`}>
+    <div className={`pane-head${focused ? ' is-focused' : ''}`} data-pane={side}>
       <span className={`pane-head__dot host-row__dot--${colour}`} aria-hidden="true" />
-      <span className="pane-head__name truncate">{name}</span>
+      <button
+        type="button"
+        className="pane-head__choose"
+        aria-haspopup="menu"
+        title={t('pane.chooseTab')}
+        onClick={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          setMenu({ x: rect.left, y: rect.bottom + 4 });
+        }}
+      >
+        <span className="pane-head__name truncate">{name}</span>
+        <Icon name="chevron-down" size={12} />
+      </button>
       <span className="pane-head__path mono truncate" title={detail}>
         {detail}
       </span>
       {focused ? <span className="pane-head__badge">{t('pane.active')}</span> : null}
+
+      {menu ? (
+        <Menu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          minWidth={260}
+          items={tabs.map((candidate) => ({
+            id: candidate.id,
+            label: label(candidate),
+            icon: candidate.kind === 'files' ? 'folder' : candidate.kind === 'terminal' ? 'terminal' : 'transfer',
+            selected: candidate.id === tab.id,
+            onSelect: () => onPickTab(candidate.id),
+          }))}
+        />
+      ) : null}
     </div>
   );
 }

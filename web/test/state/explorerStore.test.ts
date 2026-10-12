@@ -101,7 +101,143 @@ beforeEach(() => {
   apiMock.remove.mockResolvedValue({ deleted: [], failed: [] });
   apiMock.chmod.mockResolvedValue({ entry: fileEntry({ name: 'a.txt' }) });
   apiMock.touch.mockResolvedValue({ entry: fileEntry({ name: 'a.txt' }) });
-  useExplorerStore.setState({ tabs: [], activeTabId: null });
+  useExplorerStore.setState({ tabs: [], activeTabId: null, split: null });
+});
+
+describe('explorerStore — split view', () => {
+  /**
+   * Three tabs, with the first one focused before splitting.
+   *
+   * Opening a tab activates it, so without the explicit focus the split would pair the
+   * third tab with the first and every expectation below would be about the wrong pair.
+   */
+  const splitFirstTwo = (): string[] => {
+    const first = store().openFilesTab('c1', '/one');
+    const second = store().openFilesTab('c1', '/two');
+    const third = store().openFilesTab('c1', '/three');
+    store().activateTab(first);
+    store().toggleSplit();
+    return [first, second, third];
+  };
+
+  test('splitting pairs the focused tab with the next one', () => {
+    const [first, second] = splitFirstTwo();
+    // Ordered the way the strip shows them, so "left" means visually left.
+    expect(store().split).toEqual({ leftId: first, rightId: second });
+  });
+
+  test('splitting again leaves it', () => {
+    splitFirstTwo();
+    expect(store().split).not.toBeNull();
+    store().toggleSplit();
+    expect(store().split).toBeNull();
+  });
+
+  test('Tab moves the focus between the two panes, never to a third tab', () => {
+    const [first, second] = splitFirstTwo();
+    store().activateTab(first as string);
+
+    store().focusOtherPane();
+    expect(store().activeTabId).toBe(second);
+
+    store().focusOtherPane();
+    expect(store().activeTabId).toBe(first);
+
+    // However many times it is pressed, the focus stays inside the pair.
+    for (let step = 0; step < 4; step += 1) {
+      store().focusOtherPane();
+      expect([first, second]).toContain(store().activeTabId);
+    }
+  });
+
+  test('choosing a tab puts it in the named pane and focuses it', () => {
+    const [first, , third] = splitFirstTwo();
+
+    store().setPaneTab('right', third as string);
+    const split = store().split;
+    expect(split?.rightId).toBe(third);
+    // The pair stays ordered by the strip, so a later tab cannot land on the left.
+    expect(split?.leftId).toBe(first);
+    expect(store().activeTabId).toBe(third);
+  });
+
+  test('choosing the tab already in the other pane swaps the two', () => {
+    const [first, second] = splitFirstTwo();
+    store().activateTab(first as string);
+
+    // Both panes cannot show the same tab, so they trade places instead.
+    store().setPaneTab('left', second as string);
+    expect(store().split).toEqual({ leftId: second, rightId: first });
+    expect(store().activeTabId).toBe(second);
+  });
+
+  test('ignores a tab that does not exist', () => {
+    splitFirstTwo();
+    const before = store().split;
+    store().setPaneTab('left', 'tab_nope');
+    expect(store().split).toEqual(before);
+  });
+
+  test('closing a pane drops back to a single view', () => {
+    const [first, second] = splitFirstTwo();
+    expect(store().split).not.toBeNull();
+
+    store().closeTab(first as string);
+    expect(store().split).toBeNull();
+    expect(store().tabs.some((tab) => tab.id === second)).toBe(true);
+  });
+
+  test('closing every tab of a connection cannot leave a pane behind', () => {
+    splitFirstTwo();
+    store().closeTabsForConnection('c1');
+    expect(store().tabs).toHaveLength(0);
+    expect(store().split).toBeNull();
+  });
+
+  test('cycling tabs moves through all of them and wraps', () => {
+    const [first, second, third] = splitFirstTwo();
+    store().activateTab(first as string);
+
+    store().cycleTab(1);
+    expect(store().activeTabId).toBe(second);
+    store().cycleTab(1);
+    expect(store().activeTabId).toBe(third);
+    store().cycleTab(1);
+    expect(store().activeTabId).toBe(first);
+    store().cycleTab(-1);
+    expect(store().activeTabId).toBe(third);
+  });
+
+  test('clicking a tab outside the pair takes over the focused pane', () => {
+    const [first, second, third] = splitFirstTwo();
+    store().activateTab(second as string);
+
+    store().activateTab(third as string);
+    expect(store().split).toEqual({ leftId: first, rightId: third });
+    expect(store().activeTabId).toBe(third);
+  });
+
+  test('clicking a tab inside the pair only moves the focus', () => {
+    const [first, second] = splitFirstTwo();
+    store().activateTab(first as string);
+
+    store().activateTab(second as string);
+    expect(store().split).toEqual({ leftId: first, rightId: second });
+    expect(store().activeTabId).toBe(second);
+  });
+
+  test('never shows more than two panes, however tabs are switched', () => {
+    const [first, second, third] = splitFirstTwo();
+    for (const id of [first, second, third, first, second]) {
+      store().activateTab(id as string);
+      const split = store().split;
+      expect(split).not.toBeNull();
+      // Two distinct ids, both real tabs: that is what the view renders as two panes.
+      expect(split?.leftId).not.toBe(split?.rightId);
+      expect(store().tabs.some((tab) => tab.id === split?.leftId)).toBe(true);
+      expect(store().tabs.some((tab) => tab.id === split?.rightId)).toBe(true);
+    }
+  });
 });
 
 describe('explorerStore — tab lifecycle', () => {

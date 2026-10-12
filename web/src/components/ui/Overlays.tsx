@@ -89,6 +89,8 @@ export interface MenuItem {
   tone?: 'default' | 'danger';
   disabled?: boolean;
   separatorBefore?: boolean;
+  /** Marks the choice that is already in effect, as a check on the right. */
+  selected?: boolean;
   onSelect?: () => void;
 }
 
@@ -187,14 +189,22 @@ export function Menu({
             <button
               type="button"
               role="menuitem"
-              className={`menu__item${item.tone === 'danger' ? ' is-danger' : ''}`}
+              className={`menu__item${item.tone === 'danger' ? ' is-danger' : ''}${
+                item.selected ? ' is-selected' : ''
+              }`}
               disabled={item.disabled}
               onClick={() => handleSelect(item)}
               tabIndex={-1}
+              aria-checked={item.selected}
             >
               <span className="menu__icon">{item.icon ? <Icon name={item.icon} size={14} /> : null}</span>
               <span className="menu__label">{item.label}</span>
               {item.shortcut ? <span className="menu__shortcut">{item.shortcut}</span> : null}
+              {item.selected ? (
+                <span className="menu__check">
+                  <Icon name="check" size={13} />
+                </span>
+              ) : null}
             </button>
           </div>
         ),

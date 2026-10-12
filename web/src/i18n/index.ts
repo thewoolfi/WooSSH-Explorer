@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tiny i18n layer.
  *
  * No dependency and no build step: a flat dictionary per locale, `{name}`
@@ -103,6 +103,7 @@ const en = {
 
   'tabs.split': 'Split into two panes (Ctrl+\\)',
   'pane.active': 'Active',
+  'pane.chooseTab': 'Choose which tab fills this pane',
   'support.label': 'Support',
   'support.title': 'Support the project on Boosty',
   'pane.noConnection': 'No connection',
@@ -671,6 +672,7 @@ const ru: Dictionary = {
 
   'tabs.split': 'Разделить на две панели (Ctrl+\\)',
   'pane.active': 'Активна',
+  'pane.chooseTab': 'Выбрать вкладку для этой панели',
   'support.label': 'Поддержать',
   'support.title': 'Поддержать проект на Boosty',
   'pane.noConnection': 'Нет подключения',

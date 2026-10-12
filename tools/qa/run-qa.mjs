@@ -690,6 +690,73 @@ async function main() {
       await shoot(page, '36-status-bar-vitals');
     }
 
+    /* ------------------------------------------------------------ split view */
+    {
+      // Counted by geometry, not by the `hidden` attribute: a stylesheet rule more
+      // specific than `[hidden]` painted every mounted tab at once, so three tabs became
+      // three panes in a wrapping grid and switching tabs left the previous pane on screen.
+      const painted = () =>
+        page.evaluate(() =>
+          [...document.querySelectorAll('.workbench__view')]
+            .filter((v) => v.getBoundingClientRect().width > 1)
+            .map((v) => ({
+              x: Math.round(v.getBoundingClientRect().x),
+              pane: v.querySelector('.pane-head')?.getAttribute('data-pane') ?? null,
+            }))
+            .sort((a, b) => a.x - b.x),
+        );
+
+      await page.keyboard.press('Control+\\');
+      await page.waitForTimeout(1500);
+      const panes = await painted();
+      if (panes.length !== 2) {
+        problems.push({
+          label: 'split',
+          kind: 'wrong-pane-count',
+          text: `expected exactly 2 panes on screen, saw ${panes.length}`,
+        });
+      } else if (panes[0]?.pane !== 'left' || panes[1]?.pane !== 'right') {
+        problems.push({
+          label: 'split',
+          kind: 'panes-misplaced',
+          text: `the left-most pane reports "${panes[0]?.pane}" and the right-most "${panes[1]?.pane}"`,
+        });
+      }
+
+      // Each pane header offers the tabs, with the one it is showing marked.
+      const chooser = page.locator('.pane-head__choose:visible').first();
+      if ((await chooser.count()) === 0) {
+        problems.push({ label: 'split', kind: 'no-chooser', text: 'no pane header chooser' });
+      } else {
+        await chooser.click();
+        await page.waitForTimeout(400);
+        const items = await page.locator('.menu__item').count();
+        const marked = await page.locator('.menu__item.is-selected').count();
+        if (items === 0 || marked !== 1) {
+          problems.push({
+            label: 'split',
+            kind: 'chooser-broken',
+            text: `chooser listed ${items} tab(s) and marked ${marked} as current`,
+          });
+        }
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(300);
+      }
+      await shoot(page, '53-split-panes');
+
+      // Leaving split view returns to a single pane.
+      await page.keyboard.press('Control+\\');
+      await page.waitForTimeout(1000);
+      const after = await painted();
+      if (after.length !== 1) {
+        problems.push({
+          label: 'split',
+          kind: 'did-not-exit',
+          text: `still showing ${after.length} panes after leaving split`,
+        });
+      }
+    }
+
     /* -------------------------------------------------------- run on server */
     await allRows.nth(0).click();
     await page.click(
