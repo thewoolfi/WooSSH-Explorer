@@ -134,12 +134,23 @@ describe('upload/download round trip', () => {
     );
 
     // The download registered its own transfer with a local path (§2).
+    //
+    // Waiting for the transfer to *appear* is not enough: the assertions below are about a
+    // finished one, and on a slower machine the row is already listed while the bytes are
+    // still moving. This waited on registration and then asserted `done`, which passed here
+    // and failed on CI for as long as it existed.
     const downloadTransfer = await waitFor(
       async () => {
         const all = await transfersFor(connectionId);
-        return all.find((t: any) => t.direction === 'download' && t.remotePath === remotePath) ?? null;
+        const found = all.find(
+          (t: any) => t.direction === 'download' && t.remotePath === remotePath,
+        );
+        const settled =
+          found !== undefined &&
+          ['done', 'error', 'cancelled'].includes(String((found as any).state));
+        return settled ? found : null;
       },
-      { timeoutMs: 5_000, label: 'the download transfer to be registered' },
+      { timeoutMs: 15_000, label: 'the download transfer to finish' },
     );
     assert.equal(downloadTransfer.size, bytes.length);
     assert.equal(downloadTransfer.transferred, bytes.length);

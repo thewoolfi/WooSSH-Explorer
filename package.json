@@ -34,7 +34,8 @@
     "typecheck": "npm run typecheck --workspace @ssh-explorer/server && npm run typecheck --workspace @ssh-explorer/web && npm run typecheck --workspace @ssh-explorer/desktop",
     "qa": "node tools/qa/run-qa.mjs",
     "qa:token": "node tools/qa/check-token.mjs",
-    "mock-ssh": "tsx tools/qa/mock-ssh.ts"
+    "mock-ssh": "tsx tools/qa/mock-ssh.ts",
+    "release:cut": "node tools/desktop/release.mjs"
   },
   "devDependencies": {
     "playwright": "^1.64.0"
