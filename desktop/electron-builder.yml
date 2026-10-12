@@ -50,3 +50,8 @@ publish:
   owner: thewoolfi
   repo: WooSSH-Explorer
   releaseType: release
+
+# `updaterCacheDirName` is not an electron-builder option in 26.x — neither at the root nor
+# under `win`; both are rejected by the schema. The updater therefore names its cache folder
+# after the package, `@ssh-explorerdesktop-updater`, which is what it will keep until the
+# desktop workspace package is renamed to something plain.
