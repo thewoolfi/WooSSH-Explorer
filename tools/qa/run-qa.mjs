@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Browser QA driver.
  *
  *   node tools/qa/run-qa.mjs [--url http://127.0.0.1:5174] [--out design/qa]
@@ -688,6 +688,76 @@ async function main() {
         });
       }
       await shoot(page, '36-status-bar-vitals');
+    }
+
+    /* ---------------------------------------------------------- archives --- */
+    {
+      // Presence and wiring only: creating files here would disturb the steps that follow.
+      // The server's own suite covers the packing itself.
+      await page.keyboard.press('Escape');
+      await page.locator('.frow:visible').nth(0).click();
+      await page.waitForTimeout(250);
+      await page.locator('.frow:visible').nth(2).click({ modifiers: ['Shift'] });
+      await page.waitForTimeout(500);
+
+      // The driver runs pinned to en-US, but the labels are translated — so both spellings
+      // are matched, anchored so that "Разархивировать" cannot pass for "Заархивировать".
+      const archiveButton = page
+        .locator('.inspector:visible .inspector__actions button')
+        .filter({ hasText: /^(Заархивировать|Archive)/ });
+      if ((await archiveButton.count()) === 0) {
+        problems.push({
+          label: 'archive',
+          kind: 'no-action',
+          text: 'no archive action offered for a multi-selection',
+        });
+      } else {
+        await archiveButton.first().click();
+        await page.waitForTimeout(700);
+        const name = await page.inputValue('#archive-name').catch(() => '');
+        const dir = await page.inputValue('#archive-dir').catch(() => '');
+        if (name === '' || dir === '') {
+          problems.push({
+            label: 'archive',
+            kind: 'empty-defaults',
+            text: `the dialog opened with name="${name}" dir="${dir}"`,
+          });
+        }
+        await shoot(page, '55-archive-dialog');
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(400);
+      }
+
+      // A lone archive file must offer to unpack, and suggest a folder beside it.
+      const zip = page.locator('.frow:visible').filter({ hasText: '.zip' }).first();
+      if ((await zip.count()) > 0) {
+        await zip.click();
+        await page.waitForTimeout(500);
+        const extractButton = page
+          .locator('.inspector:visible .inspector__actions button')
+          .filter({ hasText: /^(Разархивировать|Extract)/ });
+        if ((await extractButton.count()) === 0) {
+          problems.push({
+            label: 'archive',
+            kind: 'no-extract',
+            text: 'an archive file offered no extract action',
+          });
+        } else {
+          await extractButton.first().click();
+          await page.waitForTimeout(700);
+          const destination = await page.inputValue('#extract-dir').catch(() => '');
+          if (destination === '') {
+            problems.push({
+              label: 'archive',
+              kind: 'no-destination',
+              text: 'the extract dialog suggested no destination',
+            });
+          }
+          await shoot(page, '56-extract-dialog');
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(400);
+        }
+      }
     }
 
     /* ------------------------------------------------------------ split view */

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DirectoryListing, FileEntry, FileReadResult } from '../../api/types';
 import { basenameRemotePath, classify } from '../../lib/path';
+import { isArchiveName } from '../../lib/archives';
 import { formatBytes, formatCount, formatFullDate, formatRelative, modeToOctal } from '../../lib/format';
 import { FileIcon, fileKindLabel } from '../ui/FileIcon';
 import { Icon } from '../ui/Icon';
@@ -30,6 +31,10 @@ export interface InspectorProps {
   onEdit: ((entry: FileEntry) => void) | null;
   /** Measures this folder and its subfolders; `null` when there is no host. */
   onMeasureUsage: (() => void) | null;
+  /** Packs the given paths into a new archive on the remote host. */
+  onArchive: (paths: string[]) => void;
+  /** Unpacks an archive; the entry is the file that was selected. */
+  onExtract: (entry: FileEntry) => void;
   measuring: boolean;
   usage: Record<string, { bytes: number; truncated: boolean }>;
 }
@@ -51,6 +56,8 @@ export function Inspector({
   onExec,
   onEdit,
   onMeasureUsage,
+  onArchive,
+  onExtract,
   measuring,
   usage,
 }: InspectorProps) {
@@ -116,7 +123,12 @@ export function Inspector({
 
       <div className="inspector__scroll scroll-y">
         {selection.length > 1 ? (
-          <MultiSummary entries={entries} selection={selection} />
+          <MultiSummary
+            entries={entries}
+            selection={selection}
+            onArchive={onArchive}
+            onExtract={onExtract}
+          />
         ) : selectedEntry ? (
           <Subject
             entry={selectedEntry}
@@ -127,6 +139,8 @@ export function Inspector({
             onEdit={onEdit}
             usage={usage}
             onMeasureUsage={onMeasureUsage}
+            onArchive={onArchive}
+            onExtract={onExtract}
             measuring={measuring}
           />
         ) : search ? (
@@ -139,6 +153,7 @@ export function Inspector({
             onExec={onExec}
             usage={usage}
             onMeasureUsage={onMeasureUsage}
+            onArchive={onArchive}
             measuring={measuring}
           />
         )}
@@ -174,6 +189,8 @@ function Subject({
   onEdit,
   usage,
   onMeasureUsage,
+  onArchive,
+  onExtract,
   measuring,
 }: {
   entry: FileEntry;
@@ -184,6 +201,8 @@ function Subject({
   onEdit: ((entry: FileEntry) => void) | null;
   usage: Record<string, { bytes: number; truncated: boolean }>;
   onMeasureUsage: (() => void) | null;
+  onArchive: (paths: string[]) => void;
+  onExtract: (entry: FileEntry) => void;
   measuring: boolean;
 }) {
   const { t } = useT();
@@ -246,6 +265,14 @@ function Subject({
                 </span>
               </button>
             ) : null}
+            <button
+              type="button"
+              className="btn btn--secondary btn--md btn--block"
+              onClick={() => onArchive([entry.path])}
+            >
+              <Icon name="layers" size={14} />
+              <span className="btn__label">{t('files.archive')}</span>
+            </button>
             <button type="button" className="btn btn--secondary btn--md btn--block" onClick={() => onExec(entry)}>
               <Icon name="code" size={14} />
               <span className="btn__label">{t('files.runHere')}</span>
@@ -283,6 +310,24 @@ function Subject({
             <button
               type="button"
               className="btn btn--secondary btn--md btn--block"
+              onClick={() => onArchive([entry.path])}
+            >
+              <Icon name="layers" size={14} />
+              <span className="btn__label">{t('files.archive')}</span>
+            </button>
+            {isArchiveName(entry.name) ? (
+              <button
+                type="button"
+                className="btn btn--secondary btn--md btn--block"
+                onClick={() => onExtract(entry)}
+              >
+                <Icon name="folder-open" size={14} />
+                <span className="btn__label">{t('files.extract')}</span>
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="btn btn--secondary btn--md btn--block"
               onClick={() => onExec(entry)}
               title="Run a command on the server"
             >
@@ -302,13 +347,27 @@ function Subject({
   );
 }
 
-function MultiSummary({ entries, selection }: { entries: FileEntry[]; selection: string[] }) {
+function MultiSummary({
+  entries,
+  selection,
+  onArchive,
+  onExtract,
+}: {
+  entries: FileEntry[];
+  selection: string[];
+  onArchive: (paths: string[]) => void;
+  onExtract: (entry: FileEntry) => void;
+}) {
   const { t, tc } = useT();
   const set = new Set(selection);
   const chosen = entries.filter((e) => set.has(e.path));
   const files = chosen.filter((e) => e.kind === 'file');
   const folders = chosen.filter((e) => e.kind === 'directory');
   const bytes = files.reduce((sum, e) => sum + e.size, 0);
+  // Extracting is offered whenever the selection resolves to a single archive file, which
+  // happens here as well as in the one-item view.
+  const only = chosen.length === 1 ? chosen[0] : undefined;
+  const canExtract = only !== undefined && only.kind === 'file' && isArchiveName(only.name);
 
   return (
     <div className="inspector__multi">
@@ -324,6 +383,27 @@ function MultiSummary({ entries, selection }: { entries: FileEntry[]; selection:
         {files.length > 0 ? <Meta label={t('inspector.totalSize')} value={formatBytes(bytes)} sub={t('inspector.filesOnly')} /> : null}
         <Meta label={t('inspector.items')} value={String(selection.length)} />
       </dl>
+
+      <div className="inspector__actions">
+        <button
+          type="button"
+          className="btn btn--secondary btn--md btn--block"
+          onClick={() => onArchive(chosen.map((entry) => entry.path))}
+        >
+          <Icon name="layers" size={14} />
+          <span className="btn__label">{t('files.archiveMany', { count: chosen.length })}</span>
+        </button>
+        {canExtract && only ? (
+          <button
+            type="button"
+            className="btn btn--secondary btn--md btn--block"
+            onClick={() => onExtract(only)}
+          >
+            <Icon name="folder-open" size={14} />
+            <span className="btn__label">{t('files.extract')}</span>
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -335,6 +415,7 @@ function FolderSummary({
   onExec,
   usage,
   onMeasureUsage,
+  onArchive,
   measuring,
 }: {
   listing: DirectoryListing | null;
@@ -343,6 +424,7 @@ function FolderSummary({
   onExec: (entry: FileEntry | null) => void;
   usage: Record<string, { bytes: number; truncated: boolean }>;
   onMeasureUsage: (() => void) | null;
+  onArchive: (paths: string[]) => void;
   measuring: boolean;
 }) {
   const { t } = useT();
@@ -383,6 +465,16 @@ function FolderSummary({
       </dl>
 
       <div className="inspector__actions">
+        {/* Packing the folder being viewed: the natural reading of "archive" with no
+            selection, and the shortest path to the send-a-project-somewhere workflow. */}
+        <button
+          type="button"
+          className="btn btn--secondary btn--md btn--block"
+          onClick={() => onArchive([listing.path])}
+        >
+          <Icon name="layers" size={14} />
+          <span className="btn__label">{t('files.archive')}</span>
+        </button>
         {onMeasureUsage ? (
           <button
             type="button"

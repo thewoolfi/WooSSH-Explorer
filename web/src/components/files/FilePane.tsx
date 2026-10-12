@@ -10,6 +10,7 @@ import { useEditStore } from '../../state/editStore';
 import { useT } from '../../i18n/useT';
 import { filterEntries, nextSort, sortEntries, type SortKey } from '../../lib/sort';
 import { basenameRemotePath, joinRemotePath, parentRemotePath } from '../../lib/path';
+import { isArchiveName } from '../../lib/archives';
 import { formatCount } from '../../lib/format';
 import { isTextTarget } from '../../lib/hooks';
 import { downloadWithResume, isDesktop } from '../../lib/desktop';
@@ -30,6 +31,8 @@ import { FileGrid } from './FileGrid';
 import { FileToolbar } from './FileToolbar';
 import { Inspector } from './Inspector';
 import { RunCommandDialog } from './RunCommandDialog';
+import { ArchiveDialog } from './ArchiveDialog';
+import { ExtractDialog } from './ExtractDialog';
 
 type DialogKind = 'new-folder' | 'rename' | 'delete' | 'permissions' | null;
 
@@ -68,6 +71,10 @@ export function FilePane({ tabId }: { tabId: string }) {
   const clearClipboard = useClipboardStore((s) => s.clear);
 
   const [menu, setMenu] = useState<{ x: number; y: number; entry: FileEntry | null } | null>(null);
+  /** Paths queued for packing; `null` when the archive dialog is closed. */
+  const [archiveTargets, setArchiveTargets] = useState<string[] | null>(null);
+  /** The archive queued for unpacking. */
+  const [extractTarget, setExtractTarget] = useState<FileEntry | null>(null);
   const [dialog, setDialog] = useState<DialogKind>(null);
   const [dialogValue, setDialogValue] = useState('');
   const [dialogBusy, setDialogBusy] = useState(false);
@@ -748,6 +755,32 @@ export function FilePane({ tabId }: { tabId: string }) {
         label: '-',
       },
       {
+        id: 'archive',
+        label:
+          targets.length > 1
+            ? t('files.archiveMany', { count: targets.length })
+            : t('files.archive'),
+        icon: 'layers',
+        disabled: !hasSelection,
+        onSelect: () => setArchiveTargets(targets.map((item) => item.path)),
+      },
+      {
+        id: 'extract',
+        label: t('files.extract'),
+        icon: 'folder-open',
+        // Offered for one archive-looking file: the server reads the file and decides for
+        // real, so this only has to be a sensible guess rather than a validator.
+        disabled: targets.length !== 1 || targets[0]?.kind !== 'file' || !isArchiveName(targets[0].name),
+        onSelect: () => {
+          const only = targets[0];
+          if (only) setExtractTarget(only);
+        },
+      },
+      {
+        id: 'sep-archive',
+        label: '-',
+      },
+      {
         id: 'copy-path',
         label: t('files.copyPath'),
         icon: 'copy',
@@ -986,6 +1019,8 @@ export function FilePane({ tabId }: { tabId: string }) {
             }
             onClose={() => setInspector(false)}
             onOpen={openEntry}
+            onArchive={(paths) => setArchiveTargets(paths)}
+            onExtract={(entry) => setExtractTarget(entry)}
             onPreviewRequest={(path) => void store.getState().loadPreview(filesTab.id, path)}
             onDownload={downloadEntry}
             onMeasureUsage={
@@ -1079,6 +1114,29 @@ export function FilePane({ tabId }: { tabId: string }) {
 
       {menu ? (
         <Menu x={menu.x} y={menu.y} onClose={() => setMenu(null)} items={menuItems} minWidth={230} />
+      ) : null}
+
+      {filesTab ? (
+        <ArchiveDialog
+          open={archiveTargets !== null}
+          connectionId={filesTab.connectionId}
+          paths={archiveTargets ?? []}
+          currentDir={filesTab.path}
+          existingNames={entries.map((item) => item.name)}
+          onClose={() => setArchiveTargets(null)}
+          onDone={() => void store.getState().refresh(filesTab.id)}
+        />
+      ) : null}
+
+      {filesTab && extractTarget ? (
+        <ExtractDialog
+          open
+          connectionId={filesTab.connectionId}
+          archivePath={extractTarget.path}
+          archiveName={extractTarget.name}
+          onClose={() => setExtractTarget(null)}
+          onDone={() => void store.getState().refresh(filesTab.id)}
+        />
       ) : null}
 
       <Modal
