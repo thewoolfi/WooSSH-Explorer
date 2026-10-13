@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tiny i18n layer.
  *
  * No dependency and no build step: a flat dictionary per locale, `{name}`
@@ -143,6 +143,7 @@ const en = {
   'files.extract': 'Extract…',
   'files.archiveMany': 'Archive {count} items…',
   'files.measureFailed': 'Could not measure the folder size',
+  'files.measureTimeout': 'The host did not answer in time.',
   'pane.noConnection': 'No connection',
   'tabs.exitSplit': 'Leave split view (Ctrl+\\)',
   'tabs.splitHint': 'Tab switches panes · Ctrl+Tab switches tabs',
@@ -749,6 +750,7 @@ const ru: Dictionary = {
   'files.extract': 'Разархивировать…',
   'files.archiveMany': 'Заархивировать объектов: {count}…',
   'files.measureFailed': 'Не удалось измерить размер папки',
+  'files.measureTimeout': 'Хост не ответил вовремя.',
   'pane.noConnection': 'Нет подключения',
   'tabs.exitSplit': 'Выйти из режима двух панелей (Ctrl+\\)',
   'tabs.splitHint': 'Tab переключает панели · Ctrl+Tab переключает вкладки',

@@ -213,14 +213,14 @@ export interface CopyOptions {
 export const DEFAULT_USAGE_NODE_CAP = 20_000;
 
 /**
- * Wall-clock budget for the whole walk, across every requested path.
+ * Wall-clock budget for the whole measurement, across every requested path.
  *
- * The node cap alone is not enough: the round trips get slower the deeper the tree goes,
- * so a cap that is comfortable on a fast link can still take minutes on a slow one. When
- * the budget runs out the answer is a lower bound, which the interface already renders as
- * "≥ N" — a partial number beats a spinner that never stops.
+ * Every step in it can be slow on a real host, and the fallback walk costs one round trip
+ * per entry — a cap alone is not enough, because the round trips get slower the deeper the
+ * tree goes. When the budget runs out the answer is a lower bound, which the interface
+ * renders as "≥ N": a partial number beats a spinner that never stops.
  */
-export const USAGE_WALK_BUDGET_MS = 15_000;
+export const USAGE_WALK_BUDGET_MS = 20_000;
 
 /**
  * The budget in force for this request.
@@ -1017,43 +1017,81 @@ export class SftpFs {
    * `du -sk` when the remote command succeeds, otherwise a recursive SFTP size walk.
    * `du` reports allocated blocks, the fallback reports apparent file sizes.
    *
-   * The fallback costs one round trip per entry, so on a real network the directory tree
-   * decides how long this takes, and a large one never finishes. It is therefore bounded by
-   * both a node cap and a wall-clock budget; hitting either yields a lower bound marked
-   * `truncated`, which the interface shows as "≥ N". Without the budget, a folder whose
-   * `du` timed out left the request open for as long as the walk took — hours — and the
-   * button in the interface spun for exactly that long.
+   * The whole operation is bounded, not merely the walk. Every step here can be slow on a
+   * real host — resolving the path, `du` itself, and then one round trip per entry in the
+   * fallback — and a single SFTP call that never comes back would stall the request no
+   * matter how well the walk counted. The deadline is therefore enforced from outside, and
+   * what has been counted by then is returned as a lower bound marked `truncated`, which
+   * the interface already renders as "≥ N". A partial number beats a spinner that never
+   * stops, and the caller can always raise the budget for a host that needs longer.
    */
   async usage(paths: string[]): Promise<UsageEntry[]> {
+    const budget = usageBudgetMs();
+    const measured = this.measureUsage(paths, budget);
+    // The walk cannot be cancelled once an SFTP call is in flight, so the deadline stops
+    // the waiting rather than the work; anything still running resolves into nothing.
+    const timer = new Promise<'expired'>((resolve) => {
+      const handle = setTimeout(() => resolve('expired'), budget);
+      handle.unref?.();
+      void measured.finally(() => clearTimeout(handle)).catch(() => undefined);
+    });
+
+    const outcome = await Promise.race([measured, timer]);
+    if (outcome !== 'expired') return outcome;
+
+    this.logger.warn('folder measurement ran out of time', { paths, budgetMs: budget });
+    // Whatever the walk had counted when the time ran out, keyed by the path the caller
+    // asked about. A path that never got as far as being counted reports zero, which is a
+    // true lower bound and is marked as one.
+    return paths.map((input) => ({
+      path: input,
+      bytes: this.partialUsage.get(input) ?? 0,
+      truncated: true,
+    }));
+  }
+
+  /** Bytes counted so far per requested path, for the deadline to report. */
+  private partialUsage = new Map<string, number>();
+
+  private async measureUsage(paths: string[], budget: number): Promise<UsageEntry[]> {
+    this.partialUsage = new Map();
     const resolved: string[] = [];
     for (const input of paths) {
       resolved.push(await this.normalize(await this.resolve(input)));
     }
     if (resolved.length === 0) return [];
 
-    const fromDu = await this.usageViaDu(resolved);
-    const deadline = Date.now() + usageBudgetMs();
+    // `du` gets a slice of the budget rather than a fixed allowance of its own, so the
+    // whole call cannot take twice as long as promised.
+    const fromDu = await this.usageViaDu(resolved, Math.min(10_000, Math.floor(budget / 2)));
+    const deadline = Date.now() + budget;
     const results: UsageEntry[] = [];
-    for (const target of resolved) {
+    for (let index = 0; index < resolved.length; index += 1) {
+      const target = resolved[index] as string;
+      // Keyed by what the caller asked for, not by the resolved path, because that is what
+      // the deadline has to answer about.
+      const input = paths[index] as string;
       if (fromDu !== null) {
         const bytes = fromDu.get(target);
         if (bytes !== undefined) {
           // `du` reports exact blocks, so nothing was cut short.
+          this.partialUsage.set(input, bytes);
           results.push({ path: target, bytes, truncated: false });
           continue;
         }
       }
       const state: SizeWalkState = { nodes: 0, truncated: false, deadline };
       const bytes = await this.recursiveSize(target, 0, state);
+      this.partialUsage.set(input, bytes);
       results.push({ path: target, bytes, truncated: state.truncated });
     }
     return results;
   }
 
-  private async usageViaDu(paths: string[]): Promise<Map<string, number> | null> {
+  private async usageViaDu(paths: string[], timeoutMs: number): Promise<Map<string, number> | null> {
     try {
       const command = `du -sk -- ${paths.map(shellQuote).join(' ')}`;
-      const result = await this.connection.exec(command, { timeoutMs: 20_000 });
+      const result = await this.connection.exec(command, { timeoutMs });
       if (result.code !== 0 && result.stdout.trim() === '') return null;
       const parsed = parseDuOutput(result.stdout);
       return parsed.size === 0 ? null : parsed;

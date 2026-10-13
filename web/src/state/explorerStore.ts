@@ -1,4 +1,4 @@
-﻿import { create } from 'zustand';
+import { create } from 'zustand';
 import type { DirectoryListing, FileEntry, FileReadResult } from '../api/types';
 import { api, ApiError } from '../api/client';
 import { basenameRemotePath, joinRemotePath, normalizeRemotePath, parentRemotePath } from '../lib/path';
@@ -658,7 +658,15 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
     }));
 
     try {
-      const { usage } = await api.usage(tab.connectionId, paths);
+      // The server bounds its own measurement, so this is only a backstop for a request
+      // that never comes back at all — a dropped connection, or a process that died.
+      // Without it the button stays disabled for as long as the tab is open.
+      const { usage } = await Promise.race([
+        api.usage(tab.connectionId, paths),
+        new Promise<never>((_, reject) =>
+          window.setTimeout(() => reject(new Error(translate('files.measureTimeout'))), 45_000),
+        ),
+      ]);
       set((s) => ({
         tabs: patchTab<FilesTab>(s.tabs, id, (t) => {
           const next = { ...t.usage };
