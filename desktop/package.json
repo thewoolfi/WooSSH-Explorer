@@ -1,6 +1,6 @@
 {
   "name": "@ssh-explorer/desktop",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "description": "WooSSH desktop shell (Electron)",
   "author": "Andrew Woolfi | Андрей Павлов",

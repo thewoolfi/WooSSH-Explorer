@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 /**
  * Cuts a release: builds, uploads, and makes sure it is actually visible.
  *
@@ -86,8 +86,24 @@ if (before.some((entry) => entry.tag_name === tag)) {
   console.log(`[release] created draft ${created.id} to upload into`);
 }
 
-// 3. Build and upload. The publisher attaches the installers, `latest.yml` and the
-//    blockmap; the last two are what makes an installed build able to update itself.
+// 3. Compile the application before packaging it. `electron-builder` packages whatever is
+//    already in `desktop/build`, so skipping this ships the *previous* build's server and
+//    interface inside a new version number — three releases went out that way, each
+//    advertised as fixed and each containing the old code.
+console.log('[release] building the application');
+execFileSync('npm', ['run', 'build:desktop'], {
+  cwd: repoRoot,
+  stdio: 'inherit',
+  shell: process.platform === 'win32',
+});
+const bundle = readFileSync(resolve(repoRoot, 'desktop', 'build', 'main.cjs'), 'utf8');
+if (bundle.length < 100_000) {
+  console.error('[release] FAILED: the desktop bundle looks empty; refusing to package it');
+  process.exit(1);
+}
+
+// 4. Upload. The publisher attaches the installers, `latest.yml` and the blockmap; the last
+//    two are what makes an installed build able to update itself.
 //
 // `shell` because on Windows `npx` is a `.cmd`, which cannot be spawned as an executable.
 execFileSync(
@@ -101,7 +117,7 @@ execFileSync(
   },
 );
 
-// 4. Publish whatever came out as a draft.
+// 5. Publish whatever came out as a draft.
 const releases = await github('/releases?per_page=30');
 const draft = releases.find((entry) => entry.tag_name === tag && entry.draft);
 if (draft) {
