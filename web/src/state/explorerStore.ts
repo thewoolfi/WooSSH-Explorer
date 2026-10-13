@@ -1,9 +1,10 @@
-import { create } from 'zustand';
+﻿import { create } from 'zustand';
 import type { DirectoryListing, FileEntry, FileReadResult } from '../api/types';
 import { api, ApiError } from '../api/client';
 import { basenameRemotePath, joinRemotePath, normalizeRemotePath, parentRemotePath } from '../lib/path';
 import { DEFAULT_SORT, type SortSpec } from '../lib/sort';
 import type { ViewMode } from './uiStore';
+import { translate } from '../i18n';
 import { useUiStore } from './uiStore';
 import { useConnectionStore } from './connectionStore';
 
@@ -123,6 +124,8 @@ interface ExplorerState {
   select: (id: string, path: string, mode: 'replace' | 'toggle' | 'range', order?: string[]) => void;
   /** Selects exactly the rows the view is showing. */
   selectAll: (id: string, order?: string[]) => void;
+  /** Replaces the selection with an explicit set, as a drag selection produces. */
+  setSelection: (id: string, paths: string[]) => void;
   clearSelection: (id: string) => void;
 
   loadPreview: (id: string, path: string) => Promise<void>;
@@ -596,6 +599,26 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
     }));
   },
 
+  /**
+   * Replaces the selection with an explicit set.
+   *
+   * A drag selection is not anchored on any one row — it is whatever the rectangle
+   * covered — so it cannot be expressed as `select(path, mode)`. The anchor is left alone
+   * so that a later Shift-click still ranges from wherever the user last clicked.
+   */
+  setSelection: (id, paths) =>
+    set((s) => ({
+      tabs: patchTab<FilesTab>(s.tabs, id, (tab) => {
+        // Only paths the view is actually showing: a rectangle must not select rows that
+        // a filter or the dotfile toggle has hidden, which it cannot cover anyway.
+        const present = new Set(
+          (tab.searchResults ?? tab.listing?.entries ?? []).map((entry) => entry.path),
+        );
+        const next = paths.filter((path) => present.has(path));
+        return { ...tab, selection: next, anchor: next.length > 0 ? tab.anchor : null };
+      }),
+    })),
+
   clearSelection: (id) =>
     set((s) => ({ tabs: patchTab<FilesTab>(s.tabs, id, (t) => ({ ...t, selection: [], anchor: null })) })),
 
@@ -652,7 +675,7 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
       }));
       useUiStore.getState().pushToast({
         level: 'error',
-        title: 'Could not measure the folder size',
+        title: translate('files.measureFailed'),
         detail: toMessage(error),
       });
     }

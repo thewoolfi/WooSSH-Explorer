@@ -1,4 +1,4 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+﻿import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { FileEntry } from '../../api/types';
 import { formatBytes, formatDate, modeToText } from '../../lib/format';
 import type { SortKey, SortSpec } from '../../lib/sort';
@@ -6,6 +6,7 @@ import { useT } from '../../i18n/useT';
 import type { MessageKey } from '../../i18n';
 import { FileIcon } from '../ui/FileIcon';
 import { Icon } from '../ui/Icon';
+import { useMarquee } from '../../lib/useMarquee';
 
 const COLUMNS: { key: SortKey | 'kind'; label: MessageKey; align?: 'right'; sortable: boolean }[] = [
   { key: 'name', label: 'files.name', sortable: true },
@@ -39,6 +40,10 @@ export interface FileTableProps {
   usage?: Record<string, { bytes: number; truncated: boolean }>;
   onSort: (key: SortKey) => void;
   onSelect: (entry: FileEntry, mode: 'replace' | 'toggle' | 'range') => void;
+  /** A drag across empty space: the paths the rectangle covered, and whether to add them. */
+  onMarquee: (paths: string[], additive: boolean) => void;
+  /** A click on empty space, which deselects. */
+  onClear: () => void;
   onOpen: (entry: FileEntry) => void;
   onContextMenu: (entry: FileEntry | null, x: number, y: number) => void;
   onBackgroundContextMenu: (x: number, y: number) => void;
@@ -54,6 +59,8 @@ export const FileTable = memo(function FileTable({
   usage,
   onSort,
   onSelect,
+  onMarquee,
+  onClear,
   onOpen,
   onContextMenu,
   onBackgroundContextMenu,
@@ -74,6 +81,15 @@ export const FileTable = memo(function FileTable({
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
+
+  const marquee = useMarquee({
+    containerRef: bodyRef,
+    // Not while the listing is a placeholder: there would be nothing to cover.
+    enabled: !loading,
+    onPreview: onMarquee,
+    onCommit: onMarquee,
+    onClear,
+  });
 
   useEffect(() => {
     const node = bodyRef.current;
@@ -147,6 +163,7 @@ export const FileTable = memo(function FileTable({
         className="ftable__body"
         ref={bodyRef}
         role="rowgroup"
+        onMouseDown={marquee.onMouseDown}
         onContextMenu={(event) => {
           if (event.target === event.currentTarget) {
             event.preventDefault();
@@ -158,8 +175,7 @@ export const FileTable = memo(function FileTable({
           <div className="fspacer" style={{ height: first * ROW_HEIGHT }} aria-hidden="true" />
         ) : null}
 
-        {window.map((entry, offset) => {
-          const index = first + offset;
+        {window.map((entry, offset) => {          const index = first + offset;
           const isSelected = selected.has(entry.path);
           const isCut = cutPaths?.has(entry.path) === true;
           return (
@@ -242,6 +258,19 @@ export const FileTable = memo(function FileTable({
           }}>
             <p>{searchMode ? t('files.noSearchResults') : t('files.emptyFolder')}</p>
           </div>
+        ) : null}
+
+        {marquee.rect ? (
+          <div
+            className="marquee"
+            aria-hidden="true"
+            style={{
+              left: marquee.rect.left,
+              top: marquee.rect.top,
+              width: marquee.rect.width,
+              height: marquee.rect.height,
+            }}
+          />
         ) : null}
       </div>
     </div>

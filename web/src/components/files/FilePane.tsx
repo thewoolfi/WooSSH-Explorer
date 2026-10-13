@@ -979,6 +979,13 @@ export function FilePane({ tabId }: { tabId: string }) {
               onSelect={(entry, mode) =>
                 store.getState().select(filesTab.id, entry.path, mode, displayOrder)
               }
+              onMarquee={(paths, additive) => {
+                // Ctrl keeps what was already selected and adds the rectangle to it;
+                // otherwise the rectangle is the whole selection, as in a file manager.
+                const held = additive ? filesTab.selection : [];
+                store.getState().setSelection(filesTab.id, [...new Set([...held, ...paths])]);
+              }}
+              onClear={() => store.getState().clearSelection(filesTab.id)}
               onOpen={openEntry}
               onContextMenu={(entry, x, y) => setMenu({ x, y, entry })}
               onBackgroundContextMenu={(x, y) => setMenu({ x, y, entry: null })}

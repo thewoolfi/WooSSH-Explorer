@@ -931,3 +931,16 @@ body.is-resizing-x * {
 .gtile.is-cut .gtile__name {
   font-style: italic;
 }
+
+/* Drag selection. Positioned inside the scrolled content, so it stays attached to the rows
+   as the list scrolls under the cursor. */
+.ftable__body { position: relative; }
+
+.marquee {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: 2px;
+}

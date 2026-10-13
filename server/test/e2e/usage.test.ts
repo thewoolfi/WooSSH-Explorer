@@ -42,4 +42,32 @@ describe('fs/usage (§6)', () => {
       assert.ok(entry.bytes > 0, 'the SFTP walk must still measure the tree');
     });
   });
+
+  /**
+   * The walk costs one round trip per entry, so an unbounded one keeps the request open for
+   * as long as the tree takes — hours on a real link — and the interface spins for exactly
+   * that long. It has to give up and say so instead.
+   */
+  test('gives up when the walk runs out of time, and reports a lower bound', async () => {
+    const saved = process.env.SSH_EXPLORER_USAGE_BUDGET_MS;
+    process.env.SSH_EXPLORER_USAGE_BUDGET_MS = '0';
+    try {
+      await withHarness({ mock: { missingCommands: ['du'] } }, async (h) => {
+        const connectionId = (await h.connectTrusting()).id;
+        const started = Date.now();
+        const res = await h.json(
+          'GET',
+          `/api/connections/${connectionId}/fs/usage?paths=${encodeURIComponent('/docs')}`,
+        );
+        const elapsed = Date.now() - started;
+        assert.equal(res.status, 200, res.text.slice(0, 300));
+        const entry = res.json.usage[0];
+        assert.equal(entry.truncated, true, 'an exhausted budget must be flagged');
+        assert.ok(elapsed < 5_000, `the request must return promptly, took ${elapsed} ms`);
+      });
+    } finally {
+      if (saved === undefined) delete process.env.SSH_EXPLORER_USAGE_BUDGET_MS;
+      else process.env.SSH_EXPLORER_USAGE_BUDGET_MS = saved;
+    }
+  });
 });

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Browser QA driver.
  *
  *   node tools/qa/run-qa.mjs [--url http://127.0.0.1:5174] [--out design/qa]
@@ -688,6 +688,49 @@ async function main() {
         });
       }
       await shoot(page, '36-status-bar-vitals');
+    }
+
+    /* -------------------------------------------------- drag selection --- */
+    {
+      // Rows span the full width, so the empty space a rubber band starts from is the gap
+      // below the last row.
+      const rows = await page.locator('.frow:visible').all();
+      const body = await page.locator('.ftable__body:visible').boundingBox();
+      const firstRow = await rows[0]?.boundingBox();
+      const bottomRow = await rows[rows.length - 1]?.boundingBox();
+      if (body && firstRow && bottomRow && rows.length > 3) {
+        const x = body.x + 60;
+        const y = Math.min(bottomRow.y + bottomRow.height + 25, body.y + body.height - 12);
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        await page.mouse.move(x, y - 15, { steps: 4 });
+        const drawn = await page.evaluate(() => document.querySelectorAll('.marquee').length);
+        await page.mouse.move(x, firstRow.y + firstRow.height / 2, { steps: 8 });
+        await page.mouse.up();
+        await page.waitForTimeout(300);
+        const count = await page.evaluate(
+          () => document.querySelectorAll('.frow.is-selected').length,
+        );
+        const left = await page.evaluate(() => document.querySelectorAll('.marquee').length);
+        if (drawn === 0) {
+          problems.push({ label: 'marquee', kind: 'no-rectangle', text: 'a drag drew no rectangle' });
+        }
+        if (count < 3) {
+          problems.push({
+            label: 'marquee',
+            kind: 'selected-too-few',
+            text: `a drag across the list selected ${count} rows`,
+          });
+        }
+        if (left !== 0) {
+          problems.push({
+            label: 'marquee',
+            kind: 'rectangle-stuck',
+            text: 'the rectangle outlived the drag',
+          });
+        }
+        await shoot(page, '57-marquee-drag');
+      }
     }
 
     /* ---------------------------------------------------------- archives --- */

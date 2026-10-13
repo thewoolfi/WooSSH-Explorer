@@ -202,8 +202,37 @@ export interface CopyOptions {
   overwrite?: boolean;
 }
 
-/** Node cap for the `usage` size walk; reaching it marks the entry `truncated`. */
-export const DEFAULT_USAGE_NODE_CAP = 200_000;
+/**
+ * Node cap for the `usage` size walk; reaching it marks the entry `truncated`.
+ *
+ * The walk is one SFTP round trip per entry, so this is a latency budget as much as a
+ * count: 200,000 of them is hours on a real link, which is indistinguishable from a hang
+ * for anyone waiting. `du` normally answers exactly and instantly; this only bounds the
+ * fallback for hosts that do not have it.
+ */
+export const DEFAULT_USAGE_NODE_CAP = 20_000;
+
+/**
+ * Wall-clock budget for the whole walk, across every requested path.
+ *
+ * The node cap alone is not enough: the round trips get slower the deeper the tree goes,
+ * so a cap that is comfortable on a fast link can still take minutes on a slow one. When
+ * the budget runs out the answer is a lower bound, which the interface already renders as
+ * "≥ N" — a partial number beats a spinner that never stops.
+ */
+export const USAGE_WALK_BUDGET_MS = 15_000;
+
+/**
+ * The budget in force for this request.
+ *
+ * `SSH_EXPLORER_USAGE_BUDGET_MS` overrides it, which is useful on a host slow enough that
+ * the default gives up too early, and is how the test drives the deadline without waiting
+ * fifteen seconds.
+ */
+function usageBudgetMs(): number {
+  const raw = Number(process.env.SSH_EXPLORER_USAGE_BUDGET_MS);
+  return Number.isFinite(raw) && raw >= 0 ? raw : USAGE_WALK_BUDGET_MS;
+}
 
 /** Parses `du -sk` output (`<kib>\t<path>`), summing duplicate path lines. */
 export function parseDuOutput(stdout: string): Map<string, number> {
@@ -987,6 +1016,13 @@ export class SftpFs {
   /**
    * `du -sk` when the remote command succeeds, otherwise a recursive SFTP size walk.
    * `du` reports allocated blocks, the fallback reports apparent file sizes.
+   *
+   * The fallback costs one round trip per entry, so on a real network the directory tree
+   * decides how long this takes, and a large one never finishes. It is therefore bounded by
+   * both a node cap and a wall-clock budget; hitting either yields a lower bound marked
+   * `truncated`, which the interface shows as "≥ N". Without the budget, a folder whose
+   * `du` timed out left the request open for as long as the walk took — hours — and the
+   * button in the interface spun for exactly that long.
    */
   async usage(paths: string[]): Promise<UsageEntry[]> {
     const resolved: string[] = [];
@@ -996,6 +1032,7 @@ export class SftpFs {
     if (resolved.length === 0) return [];
 
     const fromDu = await this.usageViaDu(resolved);
+    const deadline = Date.now() + usageBudgetMs();
     const results: UsageEntry[] = [];
     for (const target of resolved) {
       if (fromDu !== null) {
@@ -1006,7 +1043,7 @@ export class SftpFs {
           continue;
         }
       }
-      const state: SizeWalkState = { nodes: 0, truncated: false };
+      const state: SizeWalkState = { nodes: 0, truncated: false, deadline };
       const bytes = await this.recursiveSize(target, 0, state);
       results.push({ path: target, bytes, truncated: state.truncated });
     }
@@ -1034,6 +1071,12 @@ export class SftpFs {
     }
     if (state.nodes >= DEFAULT_USAGE_NODE_CAP) {
       // §6: `truncated` marks a walk that hit the cap, so the number is a lower bound.
+      state.truncated = true;
+      return 0;
+    }
+    if (state.deadline !== undefined && Date.now() >= state.deadline) {
+      // Out of time: report what has been counted so far as a lower bound rather than
+      // keeping the request open until the tree is exhausted.
       state.truncated = true;
       return 0;
     }
@@ -1098,6 +1141,8 @@ export class SftpFs {
 export interface SizeWalkState {
   nodes: number;
   truncated: boolean;
+  /** Epoch milliseconds after which the walk stops and reports a lower bound. */
+  deadline?: number;
 }
 
 /** How long one `cp`/`mv` round trip may take before it is abandoned for the SFTP path. */
