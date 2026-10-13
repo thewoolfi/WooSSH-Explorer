@@ -71,7 +71,22 @@ try {
 }
 execFileSync('git', ['push', 'origin', tag], { cwd: repoRoot, stdio: 'inherit' });
 
-// 2. Build and upload. The publisher attaches the installers, `latest.yml` and the
+// 2. Create the release before building. electron-builder's publisher creates one for every
+//    upload that finds none — three files uploaded in parallel produced two releases with
+//    the same tag and the assets split between them. Creating it here first means the
+//    publisher only ever uploads.
+const before = await github('/releases?per_page=30');
+if (before.some((entry) => entry.tag_name === tag)) {
+  console.log(`[release] a release for ${tag} already exists; uploading into it`);
+} else {
+  const created = await github('/releases', {
+    method: 'POST',
+    body: JSON.stringify({ tag_name: tag, name: `WooSSH ${version}`, draft: true, prerelease: false }),
+  });
+  console.log(`[release] created draft ${created.id} to upload into`);
+}
+
+// 3. Build and upload. The publisher attaches the installers, `latest.yml` and the
 //    blockmap; the last two are what makes an installed build able to update itself.
 //
 // `shell` because on Windows `npx` is a `.cmd`, which cannot be spawned as an executable.
@@ -86,7 +101,7 @@ execFileSync(
   },
 );
 
-// 3. Publish whatever came out as a draft.
+// 4. Publish whatever came out as a draft.
 const releases = await github('/releases?per_page=30');
 const draft = releases.find((entry) => entry.tag_name === tag && entry.draft);
 if (draft) {
