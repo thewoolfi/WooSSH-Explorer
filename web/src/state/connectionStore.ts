@@ -8,9 +8,40 @@ import type {
   VaultSecretEntry,
 } from '../api/types';
 import { HOST_COLORS } from '../api/types';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, LOCAL_CONNECTION_ID } from '../api/client';
+import { translate } from '../i18n';
 
 const ACTIVE_KEY = 'ssh-explorer.activeConnection';
+
+/**
+ * This computer, presented as one more place to browse.
+ *
+ * It is not an SSH connection and the server never returns it, but every part of the
+ * interface — tabs, pane headers, the sidebar, the split view — is built around a
+ * `ConnectionSummary`. Giving the local filesystem the same shape means all of that works
+ * on it unchanged instead of needing a parallel path.
+ */
+function localConnection(): ConnectionSummary {
+  return {
+    id: LOCAL_CONNECTION_ID,
+    label: translate('local.label'),
+    color: 'sky',
+    host: '',
+    port: 0,
+    username: '',
+    authMethod: 'password',
+    status: 'authenticated',
+    hostKeyFingerprint: '',
+    connectedAt: null,
+    latencyMs: null,
+  };
+}
+
+/** The server's list with this computer prepended. */
+function withLocal(connections: ConnectionSummary[]): ConnectionSummary[] {
+  if (connections.some((connection) => connection.id === LOCAL_CONNECTION_ID)) return connections;
+  return [localConnection(), ...connections];
+}
 
 interface ConnectionState {
   connections: ConnectionSummary[];
@@ -72,14 +103,14 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       set({
         systemInfo: info,
         profiles: profiles.profiles,
-        connections: connections.connections,
+        connections: withLocal(connections.connections),
         secrets: secrets?.secrets ?? [],
         secretStorage: secrets?.storage ?? info.secretStorage ?? null,
         activeId:
-          (known && remembered) ||
-          authenticated[0]?.id ||
-          connections.connections[0]?.id ||
-          null,
+          // This computer is always "connected", so it must not win the default: starting
+          // the application inside the local filesystem rather than the host last used
+          // would be a surprise every launch.
+          (known && remembered) || authenticated[0]?.id || connections.connections[0]?.id || null,
         bootError: null,
       });
     } catch (error) {
@@ -99,7 +130,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       const { activeId } = get();
       const stillThere = connections.some((c) => c.id === activeId);
       set({
-        connections,
+        connections: withLocal(connections),
         loadingConnections: false,
         activeId: stillThere ? activeId : (connections[0]?.id ?? null),
       });

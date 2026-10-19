@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   AppSettings,
   ArchiveFormat,
   ConnectRequest,
@@ -46,6 +46,21 @@ export class ApiError extends Error {
     this.requestId = requestId;
   }
 }
+
+/**
+ * The connection id this computer answers to.
+ *
+ * "My Computer" is not an SSH connection, but the interface treats it as one so that tabs,
+ * panes, the split view and every file operation work on it unchanged. The server gives it
+ * its own route tree, because there is no live SSH session behind it.
+ */
+export const LOCAL_CONNECTION_ID = 'local';
+
+/** Where filesystem calls for a connection go. */
+const fsBase = (id: string): string =>
+  id === LOCAL_CONNECTION_ID
+    ? '/local/fs'
+    : `/connections/${encodeURIComponent(id)}/fs`;
 
 const BASE = '/api';
 
@@ -163,71 +178,75 @@ export const api = {
     ),
 
   /* ---- filesystem ------------------------------------------------------ */
+  // The same calls serve a remote host and this computer. "My Computer" is not an SSH
+  // connection, so the server gives it its own route tree; nothing above this line needs
+  // to know which one it is talking to.
+
   list: (id: string, path: string, limit?: number) =>
     request<{ listing: DirectoryListing }>(
-      `/connections/${encodeURIComponent(id)}/fs/list${qs({ path, limit })}`,
+      `${fsBase(id)}/list${qs({ path, limit })}`,
     ),
   stat: (id: string, path: string) =>
-    request<{ entry: FileEntry }>(`/connections/${encodeURIComponent(id)}/fs/stat${qs({ path })}`),
+    request<{ entry: FileEntry }>(`${fsBase(id)}/stat${qs({ path })}`),
   read: (id: string, path: string, maxBytes?: number) =>
     request<FileReadResult>(
-      `/connections/${encodeURIComponent(id)}/fs/read${qs({ path, maxBytes })}`,
+      `${fsBase(id)}/read${qs({ path, maxBytes })}`,
     ),
   mkdir: (id: string, path: string) =>
-    request<{ entry: FileEntry }>(`/connections/${encodeURIComponent(id)}/fs/mkdir`, {
+    request<{ entry: FileEntry }>(`${fsBase(id)}/mkdir`, {
       method: 'POST',
       body: JSON.stringify({ path }),
     }),
   rename: (id: string, from: string, to: string) =>
-    request<{ entry: FileEntry }>(`/connections/${encodeURIComponent(id)}/fs/rename`, {
+    request<{ entry: FileEntry }>(`${fsBase(id)}/rename`, {
       method: 'POST',
       body: JSON.stringify({ from, to }),
     }),
   remove: (id: string, paths: string[], recursive = false) =>
     request<{ deleted: string[]; failed: { path: string; message: string }[] }>(
-      `/connections/${encodeURIComponent(id)}/fs/delete`,
+      `${fsBase(id)}/delete`,
       { method: 'POST', body: JSON.stringify({ paths, recursive }) },
     ),
   chmod: (id: string, path: string, mode: string) =>
-    request<{ entry: FileEntry }>(`/connections/${encodeURIComponent(id)}/fs/chmod`, {
+    request<{ entry: FileEntry }>(`${fsBase(id)}/chmod`, {
       method: 'POST',
       body: JSON.stringify({ path, mode }),
     }),
   touch: (id: string, path: string, mtimeMs?: number) =>
-    request<{ entry: FileEntry }>(`/connections/${encodeURIComponent(id)}/fs/touch`, {
+    request<{ entry: FileEntry }>(`${fsBase(id)}/touch`, {
       method: 'POST',
       body: JSON.stringify({ path, mtimeMs }),
     }),
   search: (id: string, path: string, query: string, limit?: number) =>
     request<{ results: FileEntry[]; truncated: boolean; scanned: number }>(
-      `/connections/${encodeURIComponent(id)}/fs/search${qs({ path, query, limit })}`,
+      `${fsBase(id)}/search${qs({ path, query, limit })}`,
     ),
   usage: (id: string, paths: string[]) =>
     request<{ usage: { path: string; bytes: number; truncated: boolean }[] }>(
-      `/connections/${encodeURIComponent(id)}/fs/usage${qs({ paths })}`,
+      `${fsBase(id)}/usage${qs({ paths })}`,
     ),
 
   copy: (id: string, sources: string[], destination: string, overwrite = false) =>
-    request<CopyResult>(`/connections/${encodeURIComponent(id)}/fs/copy`, {
+    request<CopyResult>(`${fsBase(id)}/copy`, {
       method: 'POST',
       body: JSON.stringify({ sources, destination, overwrite }),
     }),
 
   move: (id: string, sources: string[], destination: string, overwrite = false) =>
-    request<CopyResult>(`/connections/${encodeURIComponent(id)}/fs/move`, {
+    request<CopyResult>(`${fsBase(id)}/move`, {
       method: 'POST',
       body: JSON.stringify({ sources, destination, overwrite }),
     }),
 
   archive: (id: string, paths: string[], destination: string, format: ArchiveFormat) =>
     request<{ entry: FileEntry; bytes: number }>(
-      `/connections/${encodeURIComponent(id)}/fs/archive`,
+      `${fsBase(id)}/archive`,
       { method: 'POST', body: JSON.stringify({ paths, destination, format }) },
     ),
 
   extract: (id: string, path: string, destinationDir: string, overwrite = false) =>
     request<{ entries: FileEntry[]; truncated: boolean }>(
-      `/connections/${encodeURIComponent(id)}/fs/extract`,
+      `${fsBase(id)}/extract`,
       { method: 'POST', body: JSON.stringify({ path, destinationDir, overwrite }) },
     ),
 
@@ -269,7 +288,7 @@ export const api = {
     request<AppSettings>('/settings', { method: 'PATCH', body: JSON.stringify(patch) }),
 
   downloadUrl: (id: string, path: string) =>
-    `${BASE}/connections/${encodeURIComponent(id)}/fs/download${qs({ path })}`,
+    `${BASE}${fsBase(id)}/download${qs({ path })}`,
 
   upload: async (
     id: string,
@@ -281,7 +300,7 @@ export const api = {
     // XHR keeps upload progress observable in every browser we support.
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', `${BASE}/connections/${encodeURIComponent(id)}/fs/upload${qs({ path: dirPath, name: file.name })}`);
+      xhr.open('POST', `${BASE}${fsBase(id)}/upload${qs({ path: dirPath, name: file.name })}`);
       xhr.setRequestHeader('Content-Type', 'application/octet-stream');
       xhr.upload.onprogress = (e) => onProgress?.(e.loaded, e.total || file.size);
       xhr.onload = () => {

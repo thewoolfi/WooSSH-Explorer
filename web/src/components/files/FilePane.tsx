@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FileEntry } from '../../api/types';
-import { api } from '../../api/client';
+import { api, LOCAL_CONNECTION_ID } from '../../api/client';
 import { useConnectionStore } from '../../state/connectionStore';
 import { isFilesTab, visibleEntries, type FilesTab } from '../../state/explorerStore';
 import { useExplorerStore } from '../../state/explorerStore';
@@ -50,6 +50,10 @@ export function FilePane({ tabId }: { tabId: string }) {
   const tab = useExplorerStore((s) => s.tabs.find((t) => t.id === tabId) ?? null);
   const store = useExplorerStore;
   const filesTab = isFilesTab(tab) ? tab : null;
+  // This computer answers the browsing routes but has no SSH session, so anything that
+  // needs one — a terminal, an upload stream, an archive built with remote tools — is not
+  // offered here rather than failing when pressed.
+  const isLocalTab = filesTab?.connectionId === LOCAL_CONNECTION_ID;
 
   const connections = useConnectionStore((s) => s.connections);
   const connection = connections.find((c) => c.id === filesTab?.connectionId) ?? null;
@@ -675,7 +679,7 @@ export function FilePane({ tabId }: { tabId: string }) {
         id: 'terminal-here',
         label: 'Open terminal here',
         icon: 'terminal',
-        disabled: !connection,
+        disabled: !connection || isLocalTab,
         separatorBefore: true,
         onSelect: () =>
           connection && filesTab && openTerminalTab(connection.id, connection.label, filesTab.path),
@@ -684,7 +688,7 @@ export function FilePane({ tabId }: { tabId: string }) {
         id: 'download',
         label: targets.length > 1 ? `Download ${targets.length} items` : 'Download',
         icon: 'download',
-        disabled: !hasSelection,
+        disabled: !hasSelection || isLocalTab,
         onSelect: () => void downloadSelection(targets),
       },
       {
@@ -731,7 +735,7 @@ export function FilePane({ tabId }: { tabId: string }) {
         label: t('files.copy'),
         icon: 'copy',
         shortcut: 'Ctrl C',
-        disabled: !hasSelection,
+        disabled: !hasSelection || isLocalTab,
         onSelect: () => copySelection('copy'),
       },
       {
@@ -761,7 +765,7 @@ export function FilePane({ tabId }: { tabId: string }) {
             ? t('files.archiveMany', { count: targets.length })
             : t('files.archive'),
         icon: 'layers',
-        disabled: !hasSelection,
+        disabled: !hasSelection || isLocalTab,
         onSelect: () => setArchiveTargets(targets.map((item) => item.path)),
       },
       {
@@ -770,7 +774,7 @@ export function FilePane({ tabId }: { tabId: string }) {
         icon: 'folder-open',
         // Offered for one archive-looking file: the server reads the file and decides for
         // real, so this only has to be a sensible guess rather than a validator.
-        disabled: targets.length !== 1 || targets[0]?.kind !== 'file' || !isArchiveName(targets[0].name),
+        disabled: targets.length !== 1 || targets[0]?.kind !== 'file' || !isArchiveName(targets[0].name) || isLocalTab,
         onSelect: () => {
           const only = targets[0];
           if (only) setExtractTarget(only);

@@ -4,6 +4,7 @@ import { registerConnectionRoutes } from './connections.js';
 import type { RouteContext } from './context.js';
 import { registerFileRoutes } from './fs.js';
 import { registerKnownHostRoutes } from './knownHosts.js';
+import { registerLocalRoutes } from './local.js';
 import { registerNetToolRoutes } from './netTools.js';
 import { registerProfileRoutes } from './profiles.js';
 import { registerSecretRoutes } from './secrets.js';
@@ -30,6 +31,7 @@ export function registerRoutes(ctx: RouteContext, basePath = '/api'): Router {
   registerNetToolRoutes(router, ctx);
   registerUpdateRoutes(router, ctx);
   registerFileRoutes(router, ctx);
+  registerLocalRoutes(router, ctx);
   registerTransferRoutes(router, ctx);
 
   const parent = Router();

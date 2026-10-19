@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useExplorerStore, type Tab } from '../../state/explorerStore';
 import { useConnectionStore } from '../../state/connectionStore';
 import { useUiStore } from '../../state/uiStore';
@@ -6,6 +6,7 @@ import { useT } from '../../i18n/useT';
 import { Icon, type IconName } from '../ui/Icon';
 import { IconButton } from '../ui/Primitives';
 import { Menu, type MenuItem } from '../ui/Overlays';
+import { LOCAL_CONNECTION_ID } from '../../api/client';
 import { basenameRemotePath } from '../../lib/path';
 
 function tabIcon(tab: Tab): IconName {
@@ -101,7 +102,20 @@ export function TabStrip() {
     const live = connections.filter((c) => c.status === 'authenticated');
     const labels = sessionLabels(live);
 
-    if (connection && connection.status === 'authenticated') {
+    // This computer is always available and is where a file has to come from or go to
+    // when a host is in the other pane, so it is offered before any session.
+    list.push({
+      id: 'local-computer',
+      label: t('local.label'),
+      icon: 'drive',
+      onSelect: () => openFilesTab(LOCAL_CONNECTION_ID, '/', { force: true }),
+    });
+    list.push({ id: 'sep-local', label: '-' });
+
+    // It has an entry of its own above, so it is not a session to switch to as well.
+    const remote = live.filter((c) => c.id !== LOCAL_CONNECTION_ID);
+
+    if (connection && connection.status === 'authenticated' && connection.id !== LOCAL_CONNECTION_ID) {
       list.push({
         id: 'this-session',
         label: t('tabs.inThisSession', { label: labels.get(connection.id) ?? connection.label }),
@@ -110,7 +124,7 @@ export function TabStrip() {
       });
     }
 
-    const others = live.filter((c) => c.id !== connection?.id);
+    const others = remote.filter((c) => c.id !== connection?.id);
     if (others.length > 0) {
       if (list.length > 0) list.push({ id: 'sep-live', label: '-' });
       for (const other of others) {
