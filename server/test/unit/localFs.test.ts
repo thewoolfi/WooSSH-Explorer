@@ -14,6 +14,12 @@ const isWindows = process.platform === 'win32';
 
 describe('local path translation', () => {
   it('keeps the drive as the first segment, with a trailing slash at its root', () => {
+    if (!isWindows) {
+      // Off Windows the same model degrades to plain absolute paths; there are no drives.
+      assert.equal(normalizeLocalPath('/home/anna'), '/home/anna');
+      assert.equal(normalizeLocalPath('/home/../etc'), '/etc');
+      return;
+    }
     assert.equal(normalizeLocalPath('/C:/'), '/C:/');
     assert.equal(normalizeLocalPath('/C:/Users'), '/C:/Users');
     assert.equal(normalizeLocalPath('/c:/users'), '/C:/users');
@@ -21,6 +27,11 @@ describe('local path translation', () => {
   });
 
   it('collapses . and .. ', () => {
+    if (!isWindows) {
+      assert.equal(normalizeLocalPath('/home/../etc'), '/etc');
+      assert.equal(normalizeLocalPath('/home/./anna/'), '/home/anna');
+      return;
+    }
     assert.equal(normalizeLocalPath('/C:/Users/../Windows'), '/C:/Windows');
     assert.equal(normalizeLocalPath('/C:/./Users/'), '/C:/Users');
     // Above the root of a drive is the list of drives, which is where "up" should lead.
