@@ -292,8 +292,33 @@ export class LocalFs {
     return createReadStream(toNativePath(entry.path));
   }
 
-  async openWriteStream(virtual: string): Promise<Writable> {
+  async openWriteStream(virtual: string, _mode = 0o644): Promise<Writable> {
     return createWriteStream(toNativePath(await this.resolve(virtual)));
+  }
+
+  /** Where a symlink points, or null when the path is not one. */
+  async readlink(virtual: string): Promise<string | null> {
+    try {
+      return await fs.readlink(toNativePath(await this.resolve(virtual)));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Creates a symbolic link.
+   *
+   * Windows needs the type up front and refuses without the privilege; both are reported as
+   * a normal operation failure so a relayed tree reports the entry rather than the batch.
+   */
+  async symlink(linkPath: string, target: string): Promise<void> {
+    const nativeLink = toNativePath(await this.resolve(linkPath));
+    const nativeTarget = toNativePath(target);
+    try {
+      await fs.symlink(nativeTarget, nativeLink, 'file');
+    } catch (err) {
+      throw localError(err, linkPath);
+    }
   }
 
   async exists(virtual: string): Promise<boolean> {

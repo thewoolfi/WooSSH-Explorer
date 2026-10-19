@@ -1,14 +1,16 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 
 import { badRequest, notFound } from '../errors.js';
 import type { Transfer } from '../types.js';
+import type { RelayFs } from '../transfers/TransferManager.js';
 import type { SftpFs } from '../ssh/fsOps.js';
+import { LOCAL_CONNECTION_ID } from '../local/localFs.js';
 import type { RelayJob } from '../transfers/TransferManager.js';
 import { joinRemotePath, normalizeRemotePath, basename } from '../util/remotePath.js';
 import type { RouteContext } from './context.js';
-import { fsFor, notifyFsChanged, requireConnection } from './context.js';
+import { fsFor, localFsFor, notifyFsChanged, requireConnection } from './context.js';
 import { parseParams, parseBody } from './validate.js';
 
 const idSchema = z.object({ id: z.string().min(1).max(200) });
@@ -23,7 +25,7 @@ const MEASURE_MAX_NODES = 50_000;
  * UI renders as an indeterminate bar) rather than making the request walk a million entries
  * before it can start.
  */
-async function measureTree(fs: SftpFs, root: string): Promise<number> {
+async function measureTree(fs: RelayFs, root: string): Promise<number> {
   let total = 0;
   let nodes = 0;
   const stack: string[] = [root];
@@ -77,16 +79,27 @@ export function registerTransferRoutes(router: Router, ctx: RouteContext): void 
   router.post('/transfers/relay', async (req: Request, res: Response) => {
     const body = parseBody(relaySchema, req);
 
-    const source = ctx.connections.getOrThrow(body.sourceConnectionId);
-    const target = ctx.connections.getOrThrow(body.targetConnectionId);
-    for (const connection of [source, target]) {
+    // Either side may be this computer. It has no SSH session, so it is given a stand-in
+    // connection carrying only the id the transfer record needs, and the local filesystem
+    // in place of the SFTP one — the copy itself does not care which it is reading.
+    const endpoint = async (
+      id: string,
+    ): Promise<{ connection: { id: string }; fs: RelayFs }> => {
+      if (id === LOCAL_CONNECTION_ID) {
+        return { connection: { id }, fs: localFsFor(ctx) };
+      }
+      const connection = ctx.connections.getOrThrow(id);
       if (!connection.isAuthenticated) {
         throw notFound(`Connection ${connection.id} is not authenticated.`, { id: connection.id });
       }
-    }
+      return { connection, fs: fsFor(ctx, connection) };
+    };
 
-    const sourceFs = fsFor(ctx, source);
-    const targetFs = fsFor(ctx, target);
+    const source = await endpoint(body.sourceConnectionId);
+    const target = await endpoint(body.targetConnectionId);
+
+    const sourceFs = source.fs;
+    const targetFs = target.fs;
     const targetDir = normalizeRemotePath(await targetFs.resolve(body.targetDir));
     if (targetDir === '/' || !(await targetFs.isDirectory(targetDir))) {
       throw badRequest(`The target directory ${targetDir} does not exist.`, { path: targetDir });
@@ -143,12 +156,12 @@ export function registerTransferRoutes(router: Router, ctx: RouteContext): void 
     }
 
     const started = ctx.transfers.startRelay({
-      source: { connection: source, fs: sourceFs },
-      target: { connection: target, fs: targetFs },
+      source,
+      target,
       targetDir,
       jobs,
       overwrite: body.overwrite === true,
-      onFileDone: () => notifyFsChanged(ctx, target.id, targetDir),
+      onFileDone: () => notifyFsChanged(ctx, target.connection.id, targetDir),
     });
 
     // §7: `202 Accepted` — the batch runs in the background and reports over the event bus.

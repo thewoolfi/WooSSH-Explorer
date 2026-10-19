@@ -1,4 +1,4 @@
-import { EventEmitter } from 'node:events';
+﻿import { EventEmitter } from 'node:events';
 import { createWriteStream } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -9,7 +9,14 @@ import * as yazl from 'yazl';
 
 import { ApiError, conflict, internal, mapError, notFound } from '../errors.js';
 import type { Logger } from '../logger.js';
-import type { Transfer, TransferDirection, TransferSettings, TransferState } from '../types.js';
+import type {
+  DirectoryListing,
+  FileEntry,
+  Transfer,
+  TransferDirection,
+  TransferSettings,
+  TransferState,
+} from '../types.js';
 import { newId } from '../util/ids.js';
 import { basename, joinRemotePath, normalizeRemotePath } from '../util/remotePath.js';
 import type { SftpFs } from '../ssh/fsOps.js';
@@ -120,9 +127,40 @@ export interface RelayJob {
   mode?: number;
 }
 
+/**
+ * One side of a relay.
+ *
+ * Deliberately narrow: the copy needs a connection id for the transfer record and this
+ * handful of filesystem calls, nothing else. That is what lets this computer be one side of
+ * a relay — it is not an SSH connection, and requiring one would have meant a second
+ * implementation of everything below.
+ */
+export interface RelayEndpoint {
+  connection: { id: string };
+  fs: RelayFs;
+}
+
+export interface RelayFs {
+  list(options: { path?: string; limit?: number }): Promise<DirectoryListing>;
+  resolve(path: string): Promise<string>;
+  isDirectory(path: string): Promise<boolean>;
+  stat(path: string, follow?: boolean): Promise<FileEntry>;
+  readlink(path: string): Promise<string | null>;
+  symlink(linkPath: string, target: string): Promise<void>;
+  chmod(path: string, mode: string | number): Promise<FileEntry>;
+  exists(path: string): Promise<boolean>;
+  mkdirRecursive(path: string): Promise<void>;
+  remove(paths: string[], recursive: boolean): Promise<{
+    deleted: string[];
+    failed: { path: string; message: string }[];
+  }>;
+  openReadStream(path: string): Promise<Readable>;
+  openWriteStream(path: string, mode?: number): Promise<Writable>;
+}
+
 export interface RelayParams {
-  source: { connection: SshConnection; fs: SftpFs };
-  target: { connection: SshConnection; fs: SftpFs };
+  source: RelayEndpoint;
+  target: RelayEndpoint;
   /** Already resolved target directory; each job keeps its source basename. */
   targetDir: string;
   jobs: RelayJob[];

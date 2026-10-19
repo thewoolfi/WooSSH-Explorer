@@ -1,3 +1,4 @@
+﻿import { LocalFs } from '../local/localFs.js';
 import type { Request } from 'express';
 
 import type { Config } from '../config.js';
@@ -55,6 +56,9 @@ export function notifyFsChanged(ctx: RouteContext, connectionId: string, path: s
   ctx.hub.broadcast({ type: 'fs:changed', connectionId, path });
 }
 
+export function localFsFor(ctx: RouteContext): LocalFs {
+  return new LocalFs(ctx.logger);
+}
 export function notifyToast(ctx: RouteContext, level: 'info' | 'warn' | 'error', message: string): void {
   ctx.hub.broadcast({ type: 'toast', level, message });
 }
