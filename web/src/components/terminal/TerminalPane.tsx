@@ -11,6 +11,7 @@ import { useT } from '../../i18n/useT';
 import { Icon } from '../ui/Icon';
 import { IconButton, StatusDot } from '../ui/Primitives';
 import { Button } from '../ui/Primitives';
+import { TerminalInspector } from './TerminalInspector';
 
 type ConnState = 'connecting' | 'open' | 'closed' | 'error';
 
@@ -57,6 +58,12 @@ export function TerminalPane({
   const terminalFontSize = useUiStore((s) => s.terminalFontSize);
   const setTerminalFontSize = useUiStore((s) => s.setTerminalFontSize);
   const copyOnSelect = useUiStore((s) => s.copyOnSelect);
+  const inspectorOpen = useUiStore((s) => s.inspectorOpen);
+  const setInspector = useUiStore((s) => s.setInspector);
+  const toggleInspector = useUiStore((s) => s.toggleInspector);
+  const inspectorWidth = useUiStore((s) => s.inspectorWidth);
+  const setInspectorWidth = useUiStore((s) => s.setInspectorWidth);
+  const resetInspectorWidth = useUiStore((s) => s.resetInspectorWidth);
   const { t } = useT();
 
   const [state, setState] = useState<ConnState>('connecting');
@@ -89,6 +96,40 @@ export function TerminalPane({
     term.loadAddon(fit);
     term.loadAddon(search);
     term.loadAddon(new WebLinksAddon());
+
+    // Intercept wheel events so mouse scrolling scrolls the terminal buffer
+    // instead of emitting escape sequences / arrow keys into the shell input.
+    let wheelPartial = 0;
+    term.attachCustomWheelEventHandler((event: WheelEvent) => {
+      // In the normal buffer (shell prompt / stdout history) or when Shift is held,
+      // scroll the terminal viewport directly and prevent sending escape sequences
+      // or arrow keys to the remote shell stdin.
+      if (term.buffer.active.type === 'normal' || event.shiftKey) {
+        if (event.deltaY === 0) return false;
+        let lines = 0;
+        if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+          lines = Math.round(event.deltaY);
+        } else if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+          lines = Math.round(event.deltaY * term.rows);
+        } else {
+          // DOM_DELTA_PIXEL: accumulate fractional lines for smooth scrolling (~25px per line)
+          const pixelsPerLine = 25;
+          wheelPartial += event.deltaY / pixelsPerLine;
+          if (Math.abs(wheelPartial) >= 1) {
+            lines = Math.trunc(wheelPartial);
+            wheelPartial -= lines;
+          }
+        }
+        if (lines !== 0) {
+          const multiplier = event.altKey ? (term.options.fastScrollSensitivity ?? 5) : 1;
+          term.scrollLines(lines * multiplier);
+        }
+        return false;
+      }
+      // In alternate buffer without Shift (e.g. vim, nano, htop, less), let xterm
+      // pass wheel events or arrow keys to the TUI application.
+      return true;
+    });
     term.open(host);
     terminalRef.current = term;
     fitRef.current = fit;
@@ -185,18 +226,75 @@ export function TerminalPane({
       if (text) void navigator.clipboard?.writeText(text).catch(() => undefined);
     });
 
+    // Scrollbar interaction support:
+    // 1. Prevent xterm's internal element mousedown listener from calling e.preventDefault(),
+    //    which cancels native scrollbar dragging and track paging.
+    // 2. Prevent host mousedown listener from stealing focus to the hidden textarea,
+    //    which aborts active scrollbar drag capture in Chromium.
+    const isScrollbarEvent = (event: MouseEvent): boolean => {
+      const vp = host.querySelector<HTMLElement>('.xterm-viewport');
+      if (!vp) return false;
+      if (event.target instanceof Node && vp.contains(event.target)) {
+        return true;
+      }
+      const rect = vp.getBoundingClientRect();
+      return event.clientX >= rect.left && event.clientX <= rect.right;
+    };
+
+    let isDraggingScrollbar = false;
+    const viewport = host.querySelector<HTMLElement>('.xterm-viewport');
+
+    const onViewportMouseDown = (event: MouseEvent) => {
+      isDraggingScrollbar = true;
+      // Stop propagation so xterm's listener on term.element cannot call e.preventDefault(),
+      // allowing the browser to natively drag the scrollbar thumb or page the track.
+      event.stopPropagation();
+    };
+
+    if (viewport) {
+      viewport.addEventListener('mousedown', onViewportMouseDown);
+    }
+
+    const onWindowMouseUp = () => {
+      if (isDraggingScrollbar) {
+        isDraggingScrollbar = false;
+        term.focus();
+      }
+    };
+    window.addEventListener('mouseup', onWindowMouseUp);
+
     // A terminal that does not hold focus silently swallows the first keystrokes.
     const focus = () => term.focus();
     focus();
     const rafFocus = requestAnimationFrame(focus);
-    host.addEventListener('mousedown', focus);
+
+    const onHostMouseDown = (event: MouseEvent) => {
+      if (isScrollbarEvent(event)) return;
+      focus();
+    };
+    host.addEventListener('mousedown', onHostMouseDown);
+
+    const onHostWheel = (event: WheelEvent) => {
+      if (term.element && !term.element.contains(event.target as Node)) {
+        event.preventDefault();
+        if (event.deltaY === 0) return;
+        const lines = Math.sign(event.deltaY) * Math.max(1, Math.round(Math.abs(event.deltaY) / 25));
+        term.scrollLines(lines);
+      }
+    };
+    host.addEventListener('wheel', onHostWheel, { passive: false });
 
     return () => {
       disposed = true;
       cancelAnimationFrame(raf);
       cancelAnimationFrame(rafFocus);
       observer.disconnect();
-      host.removeEventListener('mousedown', focus);
+      if (viewport) {
+        viewport.removeEventListener('mousedown', onViewportMouseDown);
+      }
+      window.removeEventListener('mouseup', onWindowMouseUp);
+      host.removeEventListener('mousedown', onHostMouseDown);
+      host.removeEventListener('wheel', onHostWheel);
       disposable.dispose();
       selection.dispose();
       if (socket.readyState === WebSocket.CONNECTING) {
@@ -230,6 +328,17 @@ export function TerminalPane({
     const term = terminalRef.current;
     if (term) term.options.theme = readTheme();
   }, [theme]);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      try {
+        fitRef.current?.fit();
+      } catch {
+        /* hidden pane */
+      }
+    }, 50);
+    return () => window.clearTimeout(id);
+  }, [inspectorOpen, inspectorWidth]);
 
   useEffect(() => {
     const term = terminalRef.current;
@@ -320,6 +429,15 @@ export function TerminalPane({
         >
           {t('term.reconnect')}
         </Button>
+        <Button
+          variant={inspectorOpen ? 'secondary' : 'ghost'}
+          size="sm"
+          icon="sliders"
+          onClick={() => toggleInspector()}
+          title={t(inspectorOpen ? 'topbar.hideInspector' : 'topbar.showInspector')}
+        >
+          {t('palette.toggleInspector')}
+        </Button>
       </header>
 
       {searchOpen ? (
@@ -349,7 +467,25 @@ export function TerminalPane({
         </div>
       ) : null}
 
-      <div className="tpane__host" ref={hostRef} />
+      <div className="tpane__body">
+        <div className="tpane__host" ref={hostRef} />
+        {inspectorOpen ? (
+          <TerminalInspector
+            connectionId={connectionId}
+            width={inspectorWidth}
+            onWidthChange={setInspectorWidth}
+            onWidthReset={resetInspectorWidth}
+            onClose={() => setInspector(false)}
+            onRunCommand={(cmd) => {
+              const socket = socketRef.current;
+              if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ t: 'input', data: `${cmd.trim()}\r` }));
+                terminalRef.current?.focus();
+              }
+            }}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }

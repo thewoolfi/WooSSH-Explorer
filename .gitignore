@@ -39,3 +39,8 @@ desktop.ini
 secret.key
 id_rsa
 id_ed25519
+
+# Graphify artifacts
+graphify-out/
+.graphify*
+.agents/
