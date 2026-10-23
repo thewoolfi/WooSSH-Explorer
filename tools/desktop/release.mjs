@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 /**
  * Cuts a release: builds, uploads, and makes sure it is actually visible.
  *
@@ -58,6 +58,22 @@ async function github(path, init = {}) {
 const version = JSON.parse(readFileSync(resolve(repoRoot, 'package.json'), 'utf8')).version;
 const tag = `v${version}`;
 
+function readReleaseNotes(targetVersion) {
+  try {
+    const changelog = readFileSync(resolve(repoRoot, 'CHANGELOG.md'), 'utf8');
+    const header = `## [${targetVersion}]`;
+    const start = changelog.indexOf(header);
+    if (start === -1) return '';
+    const nextHeader = changelog.indexOf('\n## [', start + header.length);
+    const section = nextHeader === -1 ? changelog.slice(start) : changelog.slice(start, nextHeader);
+    return section.replace(/^## \[[^\]]+\][^\n]*\n+/, '').trim();
+  } catch {
+    return '';
+  }
+}
+
+const releaseNotes = readReleaseNotes(version);
+
 console.log(`[release] ${tag}`);
 
 // 1. The tag has to exist before the release can be published; GitHub refuses to publish a
@@ -76,12 +92,25 @@ execFileSync('git', ['push', 'origin', tag], { cwd: repoRoot, stdio: 'inherit' }
 //    the same tag and the assets split between them. Creating it here first means the
 //    publisher only ever uploads.
 const before = await github('/releases?per_page=30');
-if (before.some((entry) => entry.tag_name === tag)) {
+const existingBefore = before.find((entry) => entry.tag_name === tag);
+if (existingBefore) {
   console.log(`[release] a release for ${tag} already exists; uploading into it`);
+  if (releaseNotes && !existingBefore.body) {
+    await github(`/releases/${existingBefore.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ body: releaseNotes }),
+    });
+  }
 } else {
   const created = await github('/releases', {
     method: 'POST',
-    body: JSON.stringify({ tag_name: tag, name: `WooSSH ${version}`, draft: true, prerelease: false }),
+    body: JSON.stringify({
+      tag_name: tag,
+      name: `WooSSH ${version}`,
+      body: releaseNotes,
+      draft: true,
+      prerelease: false,
+    }),
   });
   console.log(`[release] created draft ${created.id} to upload into`);
 }
@@ -123,7 +152,12 @@ const draft = releases.find((entry) => entry.tag_name === tag && entry.draft);
 if (draft) {
   const published = await github(`/releases/${draft.id}`, {
     method: 'PATCH',
-    body: JSON.stringify({ draft: false, name: `WooSSH ${version}`, prerelease: false }),
+    body: JSON.stringify({
+      draft: false,
+      name: `WooSSH ${version}`,
+      ...(releaseNotes ? { body: releaseNotes } : {}),
+      prerelease: false,
+    }),
   });
   console.log(`[release] published the draft: ${published.html_url}`);
 } else {
