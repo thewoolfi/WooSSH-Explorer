@@ -1,4 +1,4 @@
-﻿import { useConnectionStore } from '../../state/connectionStore';
+import { useConnectionStore } from '../../state/connectionStore';
 import { useExplorerStore, visibleEntries, type FilesTab } from '../../state/explorerStore';
 import { useTransferStore, activeTransfers, totalSpeed } from '../../state/transferStore';
 import { useUiStore } from '../../state/uiStore';
@@ -26,6 +26,7 @@ export function StatusBar() {
   const filesTab = tab?.kind === 'files' ? (tab as FilesTab) : null;
 
   const transfers = useTransferStore((s) => s.transfers);
+  const uploadBatch = useTransferStore((s) => s.uploadBatch);
   const live = activeTransfers(transfers);
   const speed = totalSpeed(transfers);
   const setDockView = useUiStore((s) => s.setDockView);
@@ -222,7 +223,11 @@ export function StatusBar() {
         >
           <Icon name="transfer" size={12} />
           <span className="mono">
-            {live.length ? `${live.length} В· ${formatSpeed(speed)}` : t('status.idle')}
+            {uploadBatch && uploadBatch.inProgress
+              ? `${uploadBatch.completedFiles}/${uploadBatch.totalFiles} · ${formatSpeed(speed)}`
+              : live.length
+                ? `${live.length} · ${formatSpeed(speed)}`
+                : t('status.idle')}
           </span>
         </button>
         {filesTab ? (

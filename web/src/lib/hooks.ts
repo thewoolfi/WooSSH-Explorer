@@ -60,6 +60,9 @@ export function matchesCombo(event: KeyboardEvent, combo: string): boolean {
   if (key === 'left') return eventKey === 'arrowleft';
   if (key === 'right') return eventKey === 'arrowright';
   if (key === 'pageup' || key === 'pagedown') return eventKey === key;
+  if (/^[a-z]$/.test(key)) {
+    return eventKey === key || event.code === `Key${key.toUpperCase()}`;
+  }
   return eventKey === key;
 }
 

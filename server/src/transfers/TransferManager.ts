@@ -20,7 +20,10 @@ import type {
 import { newId } from '../util/ids.js';
 import { basename, joinRemotePath, normalizeRemotePath } from '../util/remotePath.js';
 import type { SftpFs } from '../ssh/fsOps.js';
-import type { SshConnection } from '../ssh/SshConnection.js';
+import type { FtpFs } from '../ftp/FtpFs.js';
+import type { ManagedConnection } from '../ssh/SshConnectionManager.js';
+
+export type AnyFs = SftpFs | FtpFs;
 import { ThroughputLimiter } from './ThroughputLimiter.js';
 import { TransferQueue } from './TransferQueue.js';
 
@@ -89,8 +92,8 @@ export interface TransferManagerOptions {
 }
 
 export interface DownloadParams {
-  connection: SshConnection;
-  fs: SftpFs;
+  connection: ManagedConnection;
+  fs: AnyFs;
   remotePath: string;
   /** Explicit destination; `null`/omitted means "use the default download directory". */
   localPath?: string | null;
@@ -104,8 +107,8 @@ export interface DownloadParams {
 }
 
 export interface BatchParams {
-  connection: SshConnection;
-  fs: SftpFs;
+  connection: ManagedConnection;
+  fs: AnyFs;
   /** Absolute, already-resolved remote paths (files and/or directories). */
   paths: string[];
 }
@@ -315,7 +318,7 @@ export class TransferManager extends EventEmitter {
 
   private async runDownload(
     record: TransferRecord,
-    fs: SftpFs,
+    fs: AnyFs,
     destination: Writable,
     resumeFrom = 0,
     rangeEnd?: number,
@@ -538,7 +541,7 @@ export class TransferManager extends EventEmitter {
 
   /** Recursively expands a remote path into the files a zip should contain. */
   private async collectEntries(
-    fs: SftpFs,
+    fs: AnyFs,
     remotePath: string,
     out: { remotePath: string; size: number }[],
     depth = 0,
@@ -562,8 +565,8 @@ export class TransferManager extends EventEmitter {
    * body is the producer and SFTP is the consumer (contract §6 `fs/upload`).
    */
   async upload(params: {
-    connection: SshConnection;
-    fs: SftpFs;
+    connection: ManagedConnection;
+    fs: AnyFs;
     remotePath: string;
     source: Readable;
     size?: number;

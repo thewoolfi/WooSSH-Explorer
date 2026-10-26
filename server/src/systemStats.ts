@@ -1,7 +1,7 @@
 import { ApiError } from './errors.js';
 import type { Logger } from './logger.js';
 import type { SshConnection } from './ssh/SshConnection.js';
-import type { DiskUsage, MemoryUsage, SwapUsage, SystemNote, SystemStats } from './types.js';
+import type { DiskKind, DiskUsage, MemoryUsage, SwapUsage, SystemNote, SystemStats } from './types.js';
 
 /**
  * Remote system stats (contract §16): ONE `exec` for the whole status panel, parsed
@@ -152,6 +152,98 @@ export function parseFree(stdout: string): { memory: MemoryUsage | null; swap: S
   return { memory, swap };
 }
 
+const PSEUDO_FS = new Set([
+  'tmpfs',
+  'devtmpfs',
+  'devfs',
+  'udev',
+  'efivarfs',
+  'none',
+  'shm',
+  'overlay',
+  'squashfs',
+  'iso9660',
+  'ramfs',
+  'devpts',
+  'sysfs',
+  'proc',
+  'securityfs',
+  'cgroup',
+  'cgroup2',
+  'pstore',
+  'autofs',
+  'mqueue',
+  'debugfs',
+  'tracefs',
+  'fusectl',
+  'configfs',
+  'binfmt_misc',
+  'hugetlbfs',
+  'nsfs',
+  'bpf',
+]);
+
+/**
+ * Classifies a mounted filesystem into local host storage, external/mounted storage (NAS, NFS, CIFS, /mnt, /media),
+ * or pseudo/ephemeral in-memory filesystems.
+ */
+export function classifyDisk(filesystem: string, mount: string): DiskKind {
+  const fs = (filesystem ?? '').trim().toLowerCase();
+  const m = (mount ?? '').trim();
+
+  // 1. Pseudo / ephemeral in-memory filesystems
+  if (PSEUDO_FS.has(fs)) return 'pseudo';
+  if (
+    m === '/run' ||
+    m.startsWith('/run/') ||
+    m === '/sys' ||
+    m.startsWith('/sys/') ||
+    m === '/dev' ||
+    m.startsWith('/dev/') ||
+    m === '/proc' ||
+    m.startsWith('/proc/') ||
+    m.includes('/credentials/') ||
+    m.includes('/containerd/') ||
+    m.includes('/docker/overlay2/')
+  ) {
+    return 'pseudo';
+  }
+
+  // 2. External / network / mounted remote storage
+  if (
+    m === '/mnt' ||
+    m.startsWith('/mnt/') ||
+    m === '/media' ||
+    m.startsWith('/media/') ||
+    m === '/net' ||
+    m.startsWith('/net/')
+  ) {
+    return 'external';
+  }
+  if (m.startsWith('/Volumes/') && !m.startsWith('/Volumes/Macintosh HD')) {
+    return 'external';
+  }
+  if (
+    fs.startsWith('//') ||
+    (fs.includes(':') && !fs.startsWith('/')) ||
+    fs.startsWith('nfs') ||
+    fs.startsWith('cifs') ||
+    fs.startsWith('smb') ||
+    fs.startsWith('sshfs') ||
+    fs.startsWith('fuse.sshfs') ||
+    fs.startsWith('fuse.rclone') ||
+    fs.startsWith('davfs') ||
+    fs.startsWith('fuse.davfs') ||
+    fs.startsWith('glusterfs') ||
+    fs.startsWith('ceph')
+  ) {
+    return 'external';
+  }
+
+  // 3. Physical / local disk
+  return 'local';
+}
+
 /** `df -Pk` → one row per mount. The KiB figures are converted to bytes. */
 export function parseDf(stdout: string): DiskUsage[] {
   const disks: DiskUsage[] = [];
@@ -167,13 +259,16 @@ export function parseDf(stdout: string): DiskUsage[] {
     const available = Number.parseInt(fields[3] as string, 10);
     if (!Number.isFinite(size) || !Number.isFinite(used) || !Number.isFinite(available)) continue;
 
+    const filesystem = fields[0] as string;
+    const mount = fields.slice(5).join(' ');
     disks.push({
-      filesystem: fields[0] as string,
+      filesystem,
       sizeBytes: size * KIB,
       usedBytes: used * KIB,
       availableBytes: available * KIB,
       // A mount point may contain spaces; `-P` keeps it in the remaining columns.
-      mount: fields.slice(5).join(' '),
+      mount,
+      kind: classifyDisk(filesystem, mount),
     });
   }
   return disks;

@@ -149,9 +149,32 @@ describe('transferStore bookkeeping', () => {
 
     expect(store().transfers.map((entry) => entry.id)).toEqual(['u1']);
     const toasts = useUiStore.getState().toasts;
-    expect(toasts.map((toast) => toast.level)).toEqual(['error']);
-    expect(toasts[0]?.title).toBe('Upload failed: bad.bin');
-    expect(toasts[0]?.detail).toBe('quota exceeded');
+    expect(toasts.map((toast) => toast.level)).toEqual(['info', 'error', 'warn']);
+    const errToast = toasts.find((t) => t.level === 'error');
+    expect(errToast?.title).toBe('Upload failed: bad.bin');
+    expect(errToast?.detail).toBe('quota exceeded');
+    const completionToast = toasts.find((t) => t.level === 'warn');
+    expect(completionToast?.persistent).toBe(true);
+  });
+
+  test('upload evaluates files, tracks completed count, and notifies with persistent toast on success', async () => {
+    apiMock.upload.mockResolvedValue({ transfer: transfer({ id: 'u1', direction: 'upload' }) });
+    const files = [new File(['abc'], 'file1.txt'), new File(['defgh'], 'file2.txt')];
+
+    useUiStore.setState({ toasts: [] });
+    await store().upload('c1', '/home', files);
+
+    const batch = store().uploadBatch;
+    expect(batch?.totalFiles).toBe(2);
+    expect(batch?.completedFiles).toBe(2);
+    expect(batch?.failedFiles).toBe(0);
+    expect(batch?.inProgress).toBe(false);
+
+    const toasts = useUiStore.getState().toasts;
+    expect(toasts.length).toBe(2); // info (evaluating) and success (completed)
+    expect(toasts[0]?.level).toBe('info');
+    expect(toasts[1]?.level).toBe('success');
+    expect(toasts[1]?.persistent).toBe(true);
   });
 });
 

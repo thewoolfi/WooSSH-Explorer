@@ -302,6 +302,10 @@ export const api = {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `${BASE}${fsBase(id)}/upload${qs({ path: dirPath, name: file.name })}`);
       xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      const headers = authHeaders();
+      for (const [key, value] of Object.entries(headers)) {
+        xhr.setRequestHeader(key, value);
+      }
       xhr.upload.onprogress = (e) => onProgress?.(e.loaded, e.total || file.size);
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {

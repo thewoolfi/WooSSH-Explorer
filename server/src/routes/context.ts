@@ -1,4 +1,4 @@
-﻿import { LocalFs } from '../local/localFs.js';
+import { LocalFs } from '../local/localFs.js';
 import type { Request } from 'express';
 
 import type { Config } from '../config.js';
@@ -8,11 +8,13 @@ import type { ProfileStore } from '../store/profileStore.js';
 import type { SecretVault } from '../store/secretVault.js';
 import type { SettingsStore } from '../store/settingsStore.js';
 import type { SftpFs } from '../ssh/fsOps.js';
+import type { FtpFs } from '../ftp/FtpFs.js';
 import type { KnownHostsStore } from '../ssh/hostKeys.js';
-import type { SshConnection } from '../ssh/SshConnection.js';
-import type { SshConnectionManager } from '../ssh/SshConnectionManager.js';
+import type { ManagedConnection, SshConnectionManager } from '../ssh/SshConnectionManager.js';
 import type { TransferManager } from '../transfers/TransferManager.js';
 import type { WsHub } from '../ws/hub.js';
+
+export type AnyFs = SftpFs | FtpFs;
 
 /** Everything a route needs. Assembled once in `server.ts`. */
 export interface RouteContext {
@@ -31,14 +33,14 @@ export interface RouteContext {
 }
 
 /** `:id` accepts a connection id or a saved profile id (contract §5). */
-export function requireConnection(ctx: RouteContext, req: Request): SshConnection {
+export function requireConnection(ctx: RouteContext, req: Request): ManagedConnection {
   const raw = req.params['id'];
   const id = typeof raw === 'string' ? raw : Array.isArray(raw) ? (raw[0] ?? '') : '';
   if (id === '') throw badRequest('A connection id is required.', { path: ['id'] });
   return ctx.connections.getOrThrow(id);
 }
 
-export function requireAuthenticatedConnection(ctx: RouteContext, req: Request): SshConnection {
+export function requireAuthenticatedConnection(ctx: RouteContext, req: Request): ManagedConnection {
   const connection = requireConnection(ctx, req);
   if (!connection.isAuthenticated) {
     throw notFound(`Connection ${connection.id} is not authenticated.`, { id: connection.id });
@@ -47,7 +49,7 @@ export function requireAuthenticatedConnection(ctx: RouteContext, req: Request):
 }
 
 /** The per-connection filesystem facade. */
-export function fsFor(ctx: RouteContext, connection: SshConnection): SftpFs {
+export function fsFor(ctx: RouteContext, connection: ManagedConnection): AnyFs {
   return connection.fs(ctx.logger);
 }
 
@@ -58,7 +60,8 @@ export function notifyFsChanged(ctx: RouteContext, connectionId: string, path: s
 
 export function localFsFor(ctx: RouteContext): LocalFs {
   return new LocalFs(ctx.logger);
-}
+}
+
 export function notifyToast(ctx: RouteContext, level: 'info' | 'warn' | 'error', message: string): void {
   ctx.hub.broadcast({ type: 'toast', level, message });
 }

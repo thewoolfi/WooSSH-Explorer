@@ -4,6 +4,7 @@ import type { Request, Response } from 'express';
 import { collectSystemStats } from '../systemStats.js';
 import { runDiagnostics } from '../diagnostics.js';
 import type { SystemStats } from '../types.js';
+import type { SshConnection } from '../ssh/SshConnection.js';
 import type { RouteContext } from './context.js';
 import { requireAuthenticatedConnection } from './context.js';
 
@@ -17,14 +18,14 @@ export function registerStatsRoutes(router: Router, ctx: RouteContext): void {
   // GET /api/connections/:id/system/stats
   router.get('/connections/:id/system/stats', async (req: Request, res: Response) => {
     const connection = requireAuthenticatedConnection(ctx, req);
-    const stats: SystemStats = await collectSystemStats(connection, ctx.logger);
+    const stats: SystemStats = await collectSystemStats(connection as unknown as SshConnection, ctx.logger);
     res.json(stats);
   });
 
   // GET /api/connections/:id/diagnostics — what this host can and cannot do.
   router.get('/connections/:id/diagnostics', async (req: Request, res: Response) => {
     const connection = requireAuthenticatedConnection(ctx, req);
-    const report = await runDiagnostics(connection, ctx.logger);
+    const report = await runDiagnostics(connection as unknown as SshConnection, ctx.logger);
     res.json(report);
   });
 }

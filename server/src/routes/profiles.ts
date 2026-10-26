@@ -20,6 +20,7 @@ const profileFields = {
   port: z.number().int().min(1).max(65535),
   username: z.string().trim().min(1).max(255),
   authMethod: z.enum(['password', 'privateKey', 'agent']),
+  protocol: z.enum(['sftp', 'ftp']).optional(),
   privateKeyPath: z.string().min(1).max(4096).optional(),
   color: z.string().regex(COLOR_PATTERN, 'color must be a short palette tag').optional(),
 };
@@ -30,6 +31,7 @@ const createSchema = z.object({
   port: profileFields.port.default(22),
   username: profileFields.username,
   authMethod: profileFields.authMethod,
+  protocol: profileFields.protocol,
   privateKeyPath: profileFields.privateKeyPath,
   color: profileFields.color,
 });
@@ -41,6 +43,7 @@ const patchSchema = z
     port: profileFields.port.optional(),
     username: profileFields.username.optional(),
     authMethod: profileFields.authMethod.optional(),
+    protocol: profileFields.protocol,
     privateKeyPath: profileFields.privateKeyPath,
     color: profileFields.color,
   })

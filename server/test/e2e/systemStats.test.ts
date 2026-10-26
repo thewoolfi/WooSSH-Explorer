@@ -40,8 +40,10 @@ describe('remote system stats (§16)', () => {
         usedBytes: 42_949_672 * KIB,
         availableBytes: 60_130_776 * KIB,
         mount: '/',
+        kind: 'local',
       });
       assert.equal(stats.disks[1].mount, '/dev/shm');
+      assert.equal(stats.disks[1].kind, 'pseudo');
 
       assert.equal(stats.hostname, 'mock-host');
       assert.equal(stats.kernel, 'Linux 6.1.0-mock');

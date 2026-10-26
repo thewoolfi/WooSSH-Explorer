@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Tiny i18n layer.
  *
  * No dependency and no build step: a flat dictionary per locale, `{name}`
@@ -296,6 +296,9 @@ const en = {
   'inspector.atLeast': 'at least {size}',
   'inspector.atLeastShort': 'the server stopped counting early',
   'inspector.measure': 'Measure folder sizes',
+  'inspector.measureItem': 'Calculate item size',
+  'inspector.measureSelected': 'Calculate size of selected items',
+  'inspector.measureSelectedHint': 'Measure the total size of all selected files and folders.',
   'inspector.measureHint': 'One du run for this folder and everything directly below it.',
   'inspector.archive': 'Archive…',
   'inspector.extract': 'Extract…',
@@ -344,6 +347,10 @@ const en = {
   'palette.openLogs': 'Open log file',
 
   /* ------------------------------------------------------- connection UI */
+  'conn.protocol': 'Protocol',
+  'conn.sftp': 'SFTP (SSH)',
+  'conn.ftp': 'FTP',
+  'files.terminalNotSupportedFtp': 'Terminal is not available for FTP connections',
   'conn.new': 'New connection',
   'conn.edit': 'Edit connection',
   'conn.subtitleNew': 'Credentials stay in memory unless you ask to save them.',
@@ -395,6 +402,7 @@ const en = {
   'conn.reconnectFailed': 'Reconnect failed',
   'conn.failed': 'Could not connect',
   'conn.credentialsSavedNote': 'Credentials are encrypted before they are stored.',
+  'conn.ftpPasswordHint': 'Optional for anonymous access.',
 
   /* ---------------------------------------------------------- host key */
   'hostkey.title': 'Unknown host key',
@@ -481,6 +489,14 @@ const en = {
   'xfer.speedLimitOff': 'Unlimited',
   'xfer.relayTitle': 'Copying between hosts',
   'xfer.resumed': 'resumed from {size}',
+  'xfer.evaluatingTitle': 'Evaluating upload',
+  'xfer.evaluatingDetail': '{count} files ({size}) to upload',
+  'xfer.uploadProgress': 'Uploading: {completed} / {total} files (remaining: {remaining})',
+  'xfer.allUploadedTitle': 'All files uploaded',
+  'xfer.allUploadedDetail': 'Successfully uploaded {count} files ({size})',
+  'xfer.batchFinishedWithErrors': 'Upload completed with errors',
+  'xfer.batchFinishedWithErrorsDetail': 'Uploaded {completed} / {total} files. Errors: {failed}',
+  'xfer.uploadFailedFor': 'Upload failed: {name}',
 
   /* ---------------------------------------------------------- operations */
   'op.newFolderTitle': 'New folder',
@@ -635,6 +651,7 @@ const en = {
   'server.memory': 'Memory',
   'server.swap': 'Swap',
   'server.disks': 'Disks',
+  'server.mountedDisks': 'Mounted storage',
   'server.used': 'used',
   'server.free': 'free',
   'server.unavailable': 'Not available on this host',
@@ -933,7 +950,10 @@ const ru: Dictionary = {
   'inspector.calculating': 'Измерение…',
   'inspector.atLeast': 'не менее {size}',
   'inspector.atLeastShort': 'сервер прекратил подсчёт раньше',
-  'inspector.measure': 'Посчитать размеры папок',
+  'inspector.measure': 'Подсчитать размеры папок',
+  'inspector.measureItem': 'Подсчитать размер элемента',
+  'inspector.measureSelected': 'Подсчитать размер выбранных элементов',
+  'inspector.measureSelectedHint': 'Подсчитать размер всех выбранных файлов и папок.',
   'inspector.measureHint': 'Один запуск du для этой папки и всего, что прямо под ней.',
   'inspector.archive': 'В архив…',
   'inspector.extract': 'Распаковать…',
@@ -979,6 +999,10 @@ const ru: Dictionary = {
   'palette.openConfig': 'Открыть папку настроек',
   'palette.openLogs': 'Открыть файл логов',
 
+  'conn.protocol': 'Протокол',
+  'conn.sftp': 'SFTP (SSH)',
+  'conn.ftp': 'FTP',
+  'files.terminalNotSupportedFtp': 'Терминал недоступен для FTP-подключений',
   'conn.new': 'Новое подключение',
   'conn.edit': 'Изменить подключение',
   'conn.subtitleNew': 'Пароль хранится в памяти, если не попросить его сохранить.',
@@ -1030,6 +1054,7 @@ const ru: Dictionary = {
   'conn.reconnectFailed': 'Не удалось переподключиться',
   'conn.failed': 'Не удалось подключиться',
   'conn.credentialsSavedNote': 'Учётные данные шифруются перед сохранением.',
+  'conn.ftpPasswordHint': 'Необязательно для анонимного входа.',
 
   'hostkey.title': 'Неизвестный ключ хоста',
   'hostkey.warning':
@@ -1113,6 +1138,14 @@ const ru: Dictionary = {
   'xfer.speedLimitOff': 'Без ограничения',
   'xfer.relayTitle': 'Копирование между хостами',
   'xfer.resumed': 'продолжено с {size}',
+  'xfer.evaluatingTitle': 'Оценка файлов перед загрузкой',
+  'xfer.evaluatingDetail': 'Обнаружено {count} файлов ({size}) для загрузки',
+  'xfer.uploadProgress': 'Загрузка: {completed} / {total} файлов (осталось: {remaining})',
+  'xfer.allUploadedTitle': 'Все файлы загружены',
+  'xfer.allUploadedDetail': 'Успешно передано {count} файлов ({size})',
+  'xfer.batchFinishedWithErrors': 'Загрузка завершена с ошибками',
+  'xfer.batchFinishedWithErrorsDetail': 'Загружено {completed} из {total} файлов. Ошибок: {failed}',
+  'xfer.uploadFailedFor': 'Ошибка загрузки: {name}',
 
   'op.newFolderTitle': 'Новая папка',
   'op.folderName': 'Имя папки',
@@ -1262,6 +1295,7 @@ const ru: Dictionary = {
   'server.memory': 'Память',
   'server.swap': 'Подкачка',
   'server.disks': 'Диски',
+  'server.mountedDisks': 'Примонтированные хранилища',
   'server.used': 'занято',
   'server.free': 'свободно',
   'server.unavailable': 'На этом хосте недоступно',

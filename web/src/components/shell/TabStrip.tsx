@@ -294,7 +294,7 @@ export function TabStrip() {
           icon="terminal"
           label={t('tabs.newTerminal')}
           size={14}
-          disabled={!connection || connection.status !== 'authenticated'}
+          disabled={!connection || connection.status !== 'authenticated' || connection.protocol === 'ftp'}
           onClick={() => connection && openTerminalTab(connection.id, connection.label, currentPath)}
         />
         <IconButton

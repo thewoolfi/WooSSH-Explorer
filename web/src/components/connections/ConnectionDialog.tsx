@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { AuthMethod, HostKeyChallenge, SavedProfile } from '../../api/types';
+import type { AuthMethod, HostKeyChallenge, Protocol, SavedProfile } from '../../api/types';
 import { HOST_COLORS } from '../../api/types';
 import { ApiError } from '../../api/client';
 import { nextHostColor, useConnectionStore } from '../../state/connectionStore';
 import { useUiStore } from '../../state/uiStore';
 import { formatRelative } from '../../lib/format';
-import { Button, Field, Segmented, StatusDot, TextInput } from '../ui/Primitives';
+import { Button, Field, Segmented, TextInput } from '../ui/Primitives';
 import { Modal } from '../ui/Overlays';
 import { Icon } from '../ui/Icon';
 import { useT } from '../../i18n/useT';
 
 interface FormState {
+  protocol: Protocol;
   label: string;
   host: string;
   port: string;
@@ -30,6 +31,7 @@ interface FormState {
 }
 
 const EMPTY: FormState = {
+  protocol: 'sftp',
   label: '',
   host: '',
   port: '22',
@@ -60,8 +62,6 @@ export function ConnectionDialog() {
   const secrets = useConnectionStore((s) => s.secrets);
   const secretStorage = useConnectionStore((s) => s.secretStorage);
   const forgetSecret = useConnectionStore((s) => s.forgetSecret);
-  const connections = useConnectionStore((s) => s.connections);
-  const openConnectionDialog = useUiStore((s) => s.openConnectionDialog);
   const { t } = useT();
 
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -75,26 +75,35 @@ export function ConnectionDialog() {
   /** The vault entry for whatever host/user is currently typed in. */
   const storedEntry = useMemo(() => {
     const host = form.host.trim();
-    const username = form.username.trim();
+    const username = form.username.trim() || (form.protocol === 'ftp' ? 'anonymous' : '');
     if (!host || !username) return undefined;
     return secrets.find(
-      (entry) => entry.host === host && entry.port === (Number(form.port) || 22) && entry.username === username,
+      (entry) =>
+        entry.host === host &&
+        entry.port === (Number(form.port) || (form.protocol === 'ftp' ? 21 : 22)) &&
+        entry.username === username,
     );
-  }, [form.host, form.username, form.port, secrets]);
+  }, [form.host, form.username, form.port, form.protocol, secrets]);
 
   useEffect(() => {
     if (!dialog.open) return;
+    const protocol =
+      dialog.protocol ??
+      dialog.profile?.protocol ??
+      (dialog.port === 21 || dialog.profile?.port === 21 ? 'ftp' : 'sftp');
     const host = dialog.host ?? dialog.profile?.host ?? '';
-    const port = dialog.port ?? dialog.profile?.port ?? 22;
+    const defaultPort = protocol === 'ftp' ? 21 : 22;
+    const port = dialog.port ?? dialog.profile?.port ?? defaultPort;
     const username = dialog.username ?? dialog.profile?.username ?? '';
     const hasStored = useConnectionStore.getState().storedSecretFor(host, port, username) !== undefined;
 
     setForm({
       ...EMPTY,
+      protocol,
       host,
       port: String(port),
       username,
-      authMethod: dialog.profile?.authMethod ?? (systemInfo?.keys.length ? 'privateKey' : 'password'),
+      authMethod: protocol === 'ftp' ? 'password' : (dialog.profile?.authMethod ?? (systemInfo?.keys.length ? 'privateKey' : 'password')),
       privateKeyPath: dialog.profile?.privateKeyPath ?? systemInfo?.keys[0]?.path ?? '',
       label: dialog.profile?.label ?? '',
       color: dialog.profile?.color ?? nextHostColor(profiles),
@@ -109,19 +118,15 @@ export function ConnectionDialog() {
     setPending(null);
   }, [dialog, profiles, systemInfo]);
 
-  /**
-   * A saved credential is offered, never forced: the card and the "use the saved
-   * credentials" checkbox appear as soon as the host triple matches, but the form
-   * is not rewritten underneath the user while they are typing. The checkbox
-   * starts ticked only when the dialog was opened for a host that has one.
-   */
-
   const keys = systemInfo?.keys ?? [];
   const patch = (part: Partial<FormState>) => setForm((f) => ({ ...f, ...part }));
 
   /** The `auth` block for a form, or `undefined` to let the vault supply it. */
   const authFor = (current: FormState) => {
     if (current.useSaved) return undefined;
+    if (current.protocol === 'ftp') {
+      return { method: 'password' as const, password: current.password || '' };
+    }
     if (current.authMethod === 'password') {
       return { method: 'password' as const, password: current.password };
     }
@@ -140,9 +145,10 @@ export function ConnectionDialog() {
     setError(null);
     try {
       const outcome = await connect({
+        protocol: current.protocol,
         host: current.host.trim(),
-        port: Number(current.port) || 22,
-        username: current.username.trim(),
+        port: Number(current.port) || (current.protocol === 'ftp' ? 21 : 22),
+        username: current.protocol === 'ftp' && !current.username.trim() ? 'anonymous' : current.username.trim(),
         label: current.label.trim() || undefined,
         color: current.color,
         ...(authFor(current) !== undefined ? { auth: authFor(current) } : {}),
@@ -150,29 +156,32 @@ export function ConnectionDialog() {
         ...(current.saveSecret && !current.useSaved ? { saveSecret: true } : {}),
         ...(trust ? { trustHostKey: true, hostKeyFingerprint: trust.fingerprint } : {}),
       });
-      const { connection, savedSecret, usedStoredSecret } = outcome;
+      const { connection } = outcome;
 
       if (editing) {
         await updateProfile(editing.id, {
+          protocol: current.protocol,
           label: connection.label,
           host: connection.host,
           port: connection.port,
           username: connection.username,
           authMethod: connection.authMethod,
           privateKeyPath:
-            current.authMethod === 'privateKey' ? current.privateKeyPath : undefined,
+            current.protocol !== 'ftp' && current.authMethod === 'privateKey' ? current.privateKeyPath : undefined,
           color: current.color,
         }).catch(() => undefined);
       } else if (current.save) {
         await useConnectionStore
           .getState()
           .saveProfile({
+            protocol: current.protocol,
             label: connection.label,
             host: connection.host,
             port: connection.port,
             username: connection.username,
             authMethod: connection.authMethod,
-            privateKeyPath: current.authMethod === 'privateKey' ? current.privateKeyPath : undefined,
+            privateKeyPath:
+              current.protocol !== 'ftp' && current.authMethod === 'privateKey' ? current.privateKeyPath : undefined,
             color: current.color,
           })
           .catch(() => undefined);
@@ -180,9 +189,9 @@ export function ConnectionDialog() {
 
       pushToast({
         level: 'success',
-        title: `Connected to ${connection.label}`,
+        title: t('conn.connectedTo', { label: connection.label }),
         detail: connection.serverInfo
-          ? `${connection.serverInfo.platform} ${connection.serverInfo.release} В· ${connection.serverInfo.arch}`
+          ? `${connection.serverInfo.platform} ${connection.serverInfo.release} · ${connection.serverInfo.arch}`
           : undefined,
       });
       setChallenge(null);
@@ -205,12 +214,12 @@ export function ConnectionDialog() {
         });
       } else if (caught instanceof ApiError && caught.code === 'HOST_KEY_MISMATCH') {
         setError(
-          `The host key changed since the last connection. Remove the old entry from ${String(
-            caught.details.knownHostsPath ?? 'known_hosts',
-          )} only if you trust this change.`,
+          t('conn.hostKeyChanged', {
+            path: String(caught.details?.knownHostsPath ?? 'known_hosts'),
+          }),
         );
       } else if (caught instanceof ApiError && caught.code === 'AUTH_FAILED') {
-        setError('Authentication failed. Check the username and credentials.');
+        setError(t('conn.authFailed'));
       } else if (caught instanceof ApiError) {
         setError(caught.message);
       } else {
@@ -222,14 +231,18 @@ export function ConnectionDialog() {
   };
 
   const onSubmit = () => {
-    if (!form.host.trim()) return setError('Enter a host name or address.');
-    if (!form.username.trim()) return setError('Enter a user name.');
+    if (!form.host.trim()) return setError(t('conn.hostRequired'));
+    if (form.protocol !== 'ftp' && !form.username.trim()) return setError(t('conn.userRequired'));
     if (!form.useSaved) {
-      if (form.authMethod === 'password' && !form.password) {
-        return setError('Enter the password, or switch to private key authentication.');
-      }
-      if (form.authMethod === 'privateKey' && !form.privateKeyPath) {
-        return setError('Choose a private key file.');
+      if (form.protocol === 'ftp') {
+        // FTP allows anonymous without password
+      } else {
+        if (form.authMethod === 'password' && !form.password) {
+          return setError(t('conn.passwordRequired'));
+        }
+        if (form.authMethod === 'privateKey' && !form.privateKeyPath) {
+          return setError(t('conn.keyRequired'));
+        }
       }
     }
     setError(null);
@@ -242,15 +255,15 @@ export function ConnectionDialog() {
     <>
       <Modal
         open={dialog.open && !challenge}
-        title={editing ? 'Edit connection' : 'New connection'}
+        title={editing ? t('conn.edit') : t('conn.new')}
         subtitle={
           editing
             ? secretStorage
               ? secretStorage.kind === 'os-keychain'
-                ? 'Saved credentials are sealed by your operating system account.'
-                : 'Saved credentials are encrypted before they are written to disk.'
-              : 'Credentials are never written to disk in plain text.'
-            : 'Credentials stay in memory unless you ask to save them.'
+                ? t('conn.subtitleEditKeychain')
+                : t('conn.subtitleEditLocal')
+              : t('conn.subtitleEditNone')
+            : t('conn.subtitleNew')
         }
         onClose={close}
         width={480}
@@ -265,81 +278,39 @@ export function ConnectionDialog() {
                   void deleteProfile(editing.id).then(close).catch(() => undefined);
                 }}
               >
-                Delete
+                {t('common.delete')}
               </Button>
             ) : null}
             <span className="spacer" />
             <Button variant="ghost" onClick={close}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button variant="primary" size="lg" loading={busy} icon="plug" onClick={onSubmit}>
-              {editing ? 'Save & connect' : 'Connect'}
+              {editing ? t('conn.saveAndConnect') : t('conn.connect')}
             </Button>
           </>
         }
       >
-        {/* Starting from scratch is the exception: offer what is already saved first. */}
-        {!editing ? (
-          <section className="savedhosts">
-            <header className="savedhosts__head">
-              <span className="label">{t('conn.savedHosts')}</span>
-              <span className="spacer" />
-              <span className="savedhosts__count mono">{profiles.length}</span>
-            </header>
-            {profiles.length === 0 ? (
-              <p className="savedhosts__empty">{t('conn.savedHostsNone')}</p>
-            ) : (
-              <>
-                <ul className="savedhosts__list">
-                  {profiles.map((profile) => {
-                    const live = connections.find(
-                      (c) =>
-                        c.host === profile.host &&
-                        c.port === profile.port &&
-                        c.username === profile.username &&
-                        c.status === 'authenticated',
-                    );
-                    const name = profile.label || `${profile.username}@${profile.host}`;
-                    return (
-                      <li key={profile.id}>
-                        <button
-                          type="button"
-                          className="savedhosts__row"
-                          title={t('conn.useSavedHost', { label: name })}
-                          onClick={() =>
-                            openConnectionDialog({
-                              profile,
-                              host: profile.host,
-                              username: profile.username,
-                              port: profile.port,
-                            })
-                          }
-                        >
-                          <span className={`host-row__dot host-row__dot--${profile.color ?? 'slate'}`}>
-                            <StatusDot tone={live ? (profile.color ?? 'mint') : 'slate'} />
-                          </span>
-                          <span className="savedhosts__text">
-                            <span className="savedhosts__label truncate">{name}</span>
-                            <span className="savedhosts__sub mono truncate">
-                              {profile.username}@{profile.host}:{profile.port}
-                            </span>
-                          </span>
-                          {live ? <span className="savedhosts__live mono">{t('sidebar.online')}</span> : null}
-                          <Icon name="chevron-right" size={13} />
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-                <p className="savedhosts__hint">{t('conn.savedHostsHint')}</p>
-              </>
-            )}
-          </section>
-        ) : null}
-
         <div className="form-grid">
-          {/* Naming comes first: a host you can recognise is worth more than one you
-              have to read a user@host string to identify. */}
+          <div className="field form-grid__wide">
+            <span className="field__label">{t('conn.protocol')}</span>
+            <Segmented
+              value={form.protocol}
+              onChange={(val) => {
+                const proto = val as 'sftp' | 'ftp';
+                patch({
+                  protocol: proto,
+                  port: proto === 'ftp' ? (form.port === '22' ? '21' : form.port) : (form.port === '21' ? '22' : form.port),
+                  authMethod: proto === 'ftp' ? 'password' : form.authMethod,
+                });
+              }}
+              options={[
+                { value: 'sftp', label: t('conn.sftp') },
+                { value: 'ftp', label: t('conn.ftp') },
+              ]}
+            />
+          </div>
+
           <Field
             label={t('conn.name')}
             htmlFor="conn-label"
@@ -349,10 +320,9 @@ export function ConnectionDialog() {
             <TextInput
               id="conn-label"
               value={form.label}
-              autoFocus
               spellCheck={false}
               placeholder={
-                form.host ? `${form.username || 'user'}@${form.host}` : t('conn.namePlaceholder')
+                form.host ? `${form.username || (form.protocol === 'ftp' ? 'anonymous' : 'user')}@${form.host}` : t('conn.namePlaceholder')
               }
               onChange={(event) => patch({ label: event.target.value })}
             />
@@ -374,19 +344,19 @@ export function ConnectionDialog() {
             </div>
           </div>
 
-          <Field label="Host" htmlFor="conn-host">
+          <Field label={t('conn.host')} htmlFor="conn-host">
             <TextInput
               id="conn-host"
               value={form.host}
               autoFocus
               mono
               spellCheck={false}
-              placeholder="prod-web-01.internal"
+              placeholder={form.protocol === 'ftp' ? 'ftp.example.com' : 'prod-web-01.internal'}
               onChange={(event) => patch({ host: event.target.value })}
               onKeyDown={(event) => event.key === 'Enter' && onSubmit()}
             />
           </Field>
-          <Field label="Port" htmlFor="conn-port">
+          <Field label={t('conn.port')} htmlFor="conn-port">
             <TextInput
               id="conn-port"
               value={form.port}
@@ -398,13 +368,13 @@ export function ConnectionDialog() {
           </Field>
         </div>
 
-        <Field label="Username" htmlFor="conn-user">
+        <Field label={t('conn.username')} htmlFor="conn-user">
           <TextInput
             id="conn-user"
             value={form.username}
             mono
             spellCheck={false}
-            placeholder="deploy"
+            placeholder={form.protocol === 'ftp' ? 'anonymous' : 'deploy'}
             onChange={(event) => patch({ username: event.target.value })}
             onKeyDown={(event) => event.key === 'Enter' && onSubmit()}
           />
@@ -417,11 +387,13 @@ export function ConnectionDialog() {
             </span>
             <div className="savedcred__body">
               <p className="savedcred__title">
-                Credentials saved for {storedEntry.username}@{storedEntry.host}
+                {t('conn.savedFor', { user: storedEntry.username, host: storedEntry.host })}
               </p>
               <p className="savedcred__meta">
-                {storedEntry.authMethod === 'password' ? 'Password' : 'Key passphrase'} В· updated{' '}
-                {formatRelative(storedEntry.updatedAt)}
+                {t('conn.savedMeta', {
+                  method: storedEntry.authMethod === 'password' ? t('conn.password') : t('conn.passphrase'),
+                  when: formatRelative(storedEntry.updatedAt),
+                })}
               </p>
             </div>
             <button
@@ -431,7 +403,7 @@ export function ConnectionDialog() {
                 void forgetSecret(storedEntry.id).then(() => patch({ useSaved: false }))
               }
             >
-              Forget
+              {t('conn.forget')}
             </button>
           </div>
         ) : null}
@@ -443,108 +415,130 @@ export function ConnectionDialog() {
               checked={form.useSaved}
               onChange={(event) => patch({ useSaved: event.target.checked })}
             />
-            <span>Use the saved credentials</span>
+            <span>{t('conn.useSaved')}</span>
           </label>
         ) : null}
 
-        {form.useSaved ? null : (
-          <>
-            <div className="field">
-              <span className="field__label">Authentication</span>
-              <div className="field__control">
-                <Segmented<AuthMethod>
-                  value={form.authMethod}
-                  ariaLabel="Authentication method"
-                  onChange={(method) => patch({ authMethod: method })}
-                  options={[
-                    { value: 'password', label: 'Password' },
-                    { value: 'privateKey', label: 'Private key' },
-                    { value: 'agent', label: 'Agent' },
-                  ]}
-                />
-              </div>
-            </div>
-
-            {form.authMethod === 'password' ? (
-              <Field label="Password" htmlFor="conn-pass">
-                <TextInput
-                  id="conn-pass"
-                  type="password"
-                  value={form.password}
-                  mono
-                  autoComplete="off"
-                  placeholder="••••••••••"
-                  icon="lock"
-                  onChange={(event) => patch({ password: event.target.value })}
-                  onKeyDown={(event) => event.key === 'Enter' && onSubmit()}
-                />
-              </Field>
-            ) : form.authMethod === 'privateKey' ? (
-              <>
-                <Field label="Private key" htmlFor="conn-key">
-                  <div className="keypick">
-                    <TextInput
-                      id="conn-key"
-                      value={form.privateKeyPath}
-                      mono
-                      spellCheck={false}
-                      placeholder="~/.ssh/id_ed25519"
-                      icon="key"
-                      onChange={(event) => patch({ privateKeyPath: event.target.value })}
-                      onKeyDown={(event) => event.key === 'Enter' && onSubmit()}
-                    />
-                    {keys.length ? (
-                      <div className="keypick__list">
-                        {keys.slice(0, 6).map((key) => (
-                          <button
-                            key={key.path}
-                            type="button"
-                            className={`keypick__item${form.privateKeyPath === key.path ? ' is-active' : ''}`}
-                            onClick={() => patch({ privateKeyPath: key.path })}
-                            title={key.path}
-                          >
-                            <Icon name="key" size={12} />
-                            <span className="mono truncate">{key.name}</span>
-                            <span className="keypick__type label">{key.type}</span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="field__hint">No keys found in {systemInfo?.sshDir ?? '~/.ssh'}.</p>
-                    )}
-                  </div>
-                </Field>
-                <Field label="Passphrase" htmlFor="conn-passphrase" hint="Leave empty when the key is not encrypted.">
-                  <TextInput
-                    id="conn-passphrase"
+        {form.protocol === 'ftp' ? (
+          !form.useSaved ? (
+            <Field
+              label={t('conn.password')}
+              htmlFor="conn-pass"
+              hint={t('conn.ftpPasswordHint')}
+            >
+              <TextInput
+                id="conn-pass"
                 type="password"
-                value={form.passphrase}
+                value={form.password}
                 mono
                 autoComplete="off"
-                placeholder="optional"
+                placeholder="••••••••••"
                 icon="lock"
-                onChange={(event) => patch({ passphrase: event.target.value })}
+                onChange={(event) => patch({ password: event.target.value })}
                 onKeyDown={(event) => event.key === 'Enter' && onSubmit()}
               />
             </Field>
-          </>
+          ) : null
         ) : (
-          <Field
-            label="Agent socket"
-            htmlFor="conn-agent"
-            hint="Leave empty to use SSH_AUTH_SOCK / the default Pageant pipe."
-          >
-            <TextInput
-              id="conn-agent"
-              value={form.agentSocket}
-              mono
-              placeholder="optional"
-              icon="plug"
-              onChange={(event) => patch({ agentSocket: event.target.value })}
-            />
-          </Field>
-            )}
-          </>
+          !form.useSaved ? (
+            <>
+              <div className="field">
+                <span className="field__label">{t('conn.authentication')}</span>
+                <div className="field__control">
+                  <Segmented<AuthMethod>
+                    value={form.authMethod}
+                    ariaLabel={t('conn.authentication')}
+                    onChange={(method) => patch({ authMethod: method })}
+                    options={[
+                      { value: 'password', label: t('conn.password') },
+                      { value: 'privateKey', label: t('conn.privateKey') },
+                      { value: 'agent', label: t('conn.agent') },
+                    ]}
+                  />
+                </div>
+              </div>
+
+              {form.authMethod === 'password' ? (
+                <Field label={t('conn.password')} htmlFor="conn-pass">
+                  <TextInput
+                    id="conn-pass"
+                    type="password"
+                    value={form.password}
+                    mono
+                    autoComplete="off"
+                    placeholder="••••••••••"
+                    icon="lock"
+                    onChange={(event) => patch({ password: event.target.value })}
+                    onKeyDown={(event) => event.key === 'Enter' && onSubmit()}
+                  />
+                </Field>
+              ) : form.authMethod === 'privateKey' ? (
+                <>
+                  <Field label={t('conn.privateKey')} htmlFor="conn-key">
+                    <div className="keypick">
+                      <TextInput
+                        id="conn-key"
+                        value={form.privateKeyPath}
+                        mono
+                        spellCheck={false}
+                        placeholder="~/.ssh/id_ed25519"
+                        icon="key"
+                        onChange={(event) => patch({ privateKeyPath: event.target.value })}
+                        onKeyDown={(event) => event.key === 'Enter' && onSubmit()}
+                      />
+                      {keys.length ? (
+                        <div className="keypick__list">
+                          {keys.slice(0, 6).map((key) => (
+                            <button
+                              key={key.path}
+                              type="button"
+                              className={`keypick__item${form.privateKeyPath === key.path ? ' is-active' : ''}`}
+                              onClick={() => patch({ privateKeyPath: key.path })}
+                              title={key.path}
+                            >
+                              <Icon name="key" size={12} />
+                              <span className="mono truncate">{key.name}</span>
+                              <span className="keypick__type label">{key.type}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="field__hint">{t('conn.noKeys', { dir: systemInfo?.sshDir ?? '~/.ssh' })}</p>
+                      )}
+                    </div>
+                  </Field>
+                  <Field label={t('conn.passphrase')} htmlFor="conn-passphrase" hint={t('conn.passphraseHint')}>
+                    <TextInput
+                      id="conn-passphrase"
+                      type="password"
+                      value={form.passphrase}
+                      mono
+                      autoComplete="off"
+                      placeholder="optional"
+                      icon="lock"
+                      onChange={(event) => patch({ passphrase: event.target.value })}
+                      onKeyDown={(event) => event.key === 'Enter' && onSubmit()}
+                    />
+                  </Field>
+                </>
+              ) : (
+                <Field
+                  label={t('conn.agentSocket')}
+                  htmlFor="conn-agent"
+                  hint={t('conn.agentSocketHint')}
+                >
+                  <TextInput
+                    id="conn-agent"
+                    value={form.agentSocket}
+                    mono
+                    placeholder="optional"
+                    icon="plug"
+                    onChange={(event) => patch({ agentSocket: event.target.value })}
+                  />
+                </Field>
+              )}
+            </>
+          ) : null
         )}
 
         <button
@@ -554,7 +548,7 @@ export function ConnectionDialog() {
           aria-expanded={advanced}
         >
           <Icon name={advanced ? 'chevron-down' : 'chevron-right'} size={13} />
-          <span>Advanced</span>
+          <span>{t('conn.advanced')}</span>
         </button>
 
         {advanced ? (
@@ -572,7 +566,7 @@ export function ConnectionDialog() {
           </div>
         ) : null}
 
-        {!form.useSaved && form.authMethod !== 'agent' ? (
+        {!form.useSaved && (form.protocol === 'ftp' || form.authMethod !== 'agent') ? (
           <label className="checkbox checkbox--stacked">
             <input
               type="checkbox"
@@ -580,11 +574,11 @@ export function ConnectionDialog() {
               onChange={(event) => patch({ saveSecret: event.target.checked })}
             />
             <span>
-              Save these credentials
+              {t('conn.saveCredentials')}
               <span className="checkbox__hint">
                 {secretStorage
                   ? secretStorage.label
-                  : 'Encrypted before it is written to disk — never in plain text.'}
+                  : t('conn.credentialsSavedNote')}
               </span>
             </span>
           </label>
@@ -628,11 +622,12 @@ export function HostKeyDialog({
   onCancel: () => void;
   onTrust: () => void;
 }) {
+  const { t } = useT();
   if (!challenge) return null;
   return (
     <Modal
       open
-      title="Unknown host key"
+      title={t('hostkey.title')}
       subtitle={`${challenge.host}:${challenge.port}`}
       onClose={onCancel}
       width={520}
@@ -640,36 +635,33 @@ export function HostKeyDialog({
         <>
           <span className="spacer" />
           <Button variant="secondary" onClick={onCancel}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant="primary" loading={busy} icon="shield" onClick={onTrust}>
-            Trust and continue
+            {t('hostkey.trust')}
           </Button>
         </>
       }
     >
       <p className="warn-line">
         <Icon name="alert" size={15} />
-        <span>
-          This host is not in your known hosts yet. Verify the fingerprint through a channel you
-          already trust before continuing.
-        </span>
+        <span>{t('hostkey.warning')}</span>
       </p>
 
       <div className="fingerprint">
-        <span className="label">SHA256 fingerprint</span>
+        <span className="label">{t('hostkey.fingerprint')}</span>
         <code className="mono">{challenge.fingerprint}</code>
         {challenge.keyType ? (
           <span className="fingerprint__type mono">
             {challenge.keyType}
-            {challenge.algorithm ? ` В· ${challenge.algorithm}` : ''}
+            {challenge.algorithm ? ` · ${challenge.algorithm}` : ''}
           </span>
         ) : null}
       </div>
 
       <p className="dialog__text">
-        Trusting writes the key to <code className="mono">{challenge.knownHostsPath || 'known_hosts'}</code>.
-        If this key ever changes, SSH Explorer refuses the connection instead of trusting it silently.
+        {t('hostkey.trustWrites', { path: challenge.knownHostsPath || 'known_hosts' })}{' '}
+        {t('hostkey.trustWritesTail')}
       </p>
     </Modal>
   );

@@ -21,10 +21,31 @@ export interface DroppedTree {
   unsupported: boolean;
 }
 
-interface FileSystemEntryLike {
-  isFile: boolean;
-  isDirectory: boolean;
-  name: string;
+/**
+ * Detects whether a drag event carries files (from the OS or another window).
+ * Robust across browsers, Electron, DOMStringList, and different OS conventions.
+ */
+export function hasDropFiles(dt: DataTransfer | null | undefined): boolean {
+  if (!dt) return false;
+  if (dt.files && dt.files.length > 0) return true;
+  if (dt.types) {
+    try {
+      const types = Array.from(dt.types);
+      if (
+        types.some(
+          (t) =>
+            t.toLowerCase() === 'files' ||
+            t === 'application/x-moz-file' ||
+            t === 'text/uri-list',
+        )
+      ) {
+        return true;
+      }
+    } catch {
+      /* fallback */
+    }
+  }
+  return false;
 }
 
 /** Reads every batch from a directory reader; it returns at most 100 at a time. */
@@ -49,10 +70,22 @@ function fileFromEntry(entry: FileSystemFileEntry): Promise<File> {
   return new Promise((resolve, reject) => entry.file(resolve, reject));
 }
 
-async function walk(entry: FileSystemEntry, prefix: string, out: DroppedTree): Promise<void> {
+async function walk(
+  entry: FileSystemEntry,
+  prefix: string,
+  out: DroppedTree,
+  rawFiles: File[],
+): Promise<void> {
   if (entry.isFile) {
-    const file = await fileFromEntry(entry as FileSystemFileEntry);
-    out.files.push({ file, relativePath: prefix === '' ? file.name : `${prefix}/${file.name}` });
+    try {
+      const file = await fileFromEntry(entry as FileSystemFileEntry);
+      out.files.push({ file, relativePath: prefix === '' ? file.name : `${prefix}/${file.name}` });
+    } catch {
+      const match = rawFiles.find((f) => f.name === entry.name);
+      if (match) {
+        out.files.push({ file: match, relativePath: prefix === '' ? match.name : `${prefix}/${match.name}` });
+      }
+    }
     return;
   }
   if (!entry.isDirectory) return;
@@ -61,7 +94,7 @@ async function walk(entry: FileSystemEntry, prefix: string, out: DroppedTree): P
   out.directories.push(directory);
   const reader = (entry as FileSystemDirectoryEntry).createReader();
   for (const child of await readAllEntries(reader)) {
-    await walk(child, directory, out);
+    await walk(child, directory, out, rawFiles);
   }
 }
 
@@ -69,30 +102,51 @@ async function walk(entry: FileSystemEntry, prefix: string, out: DroppedTree): P
  * Collects the files behind a drop, walking folders when the browser allows it.
  * Never throws: an unreadable subfolder is skipped rather than failing the drop.
  */
-export async function collectDroppedTree(transfer: DataTransfer): Promise<DroppedTree> {
+export function collectDroppedTree(transfer: DataTransfer): Promise<DroppedTree> {
   const out: DroppedTree = { files: [], directories: [], unsupported: false };
-  const items = Array.from(transfer.items ?? []).filter((item) => item.kind === 'file');
 
-  const supportsEntries = items.some((item) => typeof item.webkitGetAsEntry === 'function');
-  if (!supportsEntries) {
-    // Safari and very old browsers: fall back to the flat list, folders and all.
-    for (const file of Array.from(transfer.files ?? [])) {
-      out.files.push({ file, relativePath: file.name });
+  // Synchronously extract raw files from transfer.files before any async microtask
+  // can detach or clear the browser's DataTransfer object.
+  const rawFiles = Array.from(transfer.files ?? []);
+
+  // Synchronously extract entries from transfer.items before any async microtask.
+  const entries: (FileSystemEntry | null)[] = [];
+  try {
+    if (transfer.items && transfer.items.length > 0) {
+      for (let i = 0; i < transfer.items.length; i++) {
+        const item = transfer.items[i];
+        if (item && item.kind === 'file') {
+          entries.push(typeof item.webkitGetAsEntry === 'function' ? item.webkitGetAsEntry() : null);
+        }
+      }
     }
-    out.unsupported = true;
+  } catch {
+    /* ignore synchronous extraction error */
+  }
+
+  return (async () => {
+    const validEntries = entries.filter((e): e is FileSystemEntry => e !== null);
+
+    if (validEntries.length > 0) {
+      for (const entry of validEntries) {
+        try {
+          await walk(entry, '', out, rawFiles);
+        } catch {
+          /* skip unreadable branch */
+        }
+      }
+    }
+
+    // Crucial fallback: If entry-based walking produced no files (common on Windows OS file drops
+    // where webkitGetAsEntry returns null or fails), ALWAYS fall back to rawFiles!
+    if (out.files.length === 0 && rawFiles.length > 0) {
+      for (const file of rawFiles) {
+        out.files.push({ file, relativePath: file.name });
+      }
+    }
+
     return out;
-  }
-
-  for (const item of items) {
-    const entry = item.webkitGetAsEntry();
-    if (!entry) continue;
-    try {
-      await walk(entry, '', out);
-    } catch {
-      /* skip an unreadable branch instead of losing the whole drop */
-    }
-  }
-  return out;
+  })();
 }
 
 /**

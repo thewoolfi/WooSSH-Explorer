@@ -7,6 +7,7 @@ import { useEditStore } from '../../state/editStore';
 import { eventBus } from '../../state/eventBus';
 import { api } from '../../api/client';
 import { useHotkey } from '../../lib/hooks';
+import { hasDropFiles } from '../../lib/drop';
 import { useT } from '../../i18n/useT';
 import { useUpdateWatch } from '../../lib/updates';
 import { onDownloadDone, onMenuAction, revealInFileManager, desktopInfo, isDesktop } from '../../lib/desktop';
@@ -191,7 +192,7 @@ export function AppShell() {
   });
   useHotkey('mod+i', (event) => {
     event.preventDefault();
-    toggleInspector();
+    toggleInspector(activeTabId ?? undefined);
   });
   useHotkey('mod+n', (event) => {
     event.preventDefault();
@@ -251,6 +252,26 @@ export function AppShell() {
     event.preventDefault();
     useExplorerStore.getState().closeTab(tab);
   });
+
+  /* Prevent default browser/Electron drop handling on window so file drops are accepted smoothly */
+  useEffect(() => {
+    const handleDragOver = (e: DragEvent) => {
+      if (hasDropFiles(e.dataTransfer)) {
+        e.preventDefault();
+      }
+    };
+    const handleDrop = (e: DragEvent) => {
+      if (hasDropFiles(e.dataTransfer)) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('drop', handleDrop);
+    return () => {
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('drop', handleDrop);
+    };
+  }, []);
 
   /* --------------------------------------------------------------- Tab key ---
    * In split mode Tab moves between the two panes, exactly as a two-panel file manager
@@ -372,7 +393,7 @@ export function AppShell() {
                         </div>
                       }
                     >
-                      <TerminalPane connectionId={tab.connectionId} title={tab.title} cwd={tab.cwd} />
+                      <TerminalPane connectionId={tab.connectionId} title={tab.title} cwd={tab.cwd} tabId={tab.id} />
                     </Suspense>
                   ) : null}
                   {tab.kind === 'transfers' ? <TransferView /> : null}

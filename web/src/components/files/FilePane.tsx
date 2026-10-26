@@ -21,7 +21,7 @@ import {
   type ClipboardMode,
   type PasteRefusal,
 } from '../../state/clipboardStore';
-import { collectDroppedTree, collectPickedTree, directoryOrder, groupByDirectory, type DroppedTree } from '../../lib/drop';
+import { collectDroppedTree, collectPickedTree, directoryOrder, groupByDirectory, hasDropFiles, type DroppedTree } from '../../lib/drop';
 import { EmptyState } from '../ui/Primitives';
 import { Menu, Modal, type MenuItem } from '../ui/Overlays';
 import { Icon } from '../ui/Icon';
@@ -58,8 +58,9 @@ export function FilePane({ tabId }: { tabId: string }) {
   const connections = useConnectionStore((s) => s.connections);
   const connection = connections.find((c) => c.id === filesTab?.connectionId) ?? null;
 
-  const inspectorOpen = useUiStore((s) => s.inspectorOpen);
+  const inspectorOpen = useUiStore((s) => s.isInspectorOpen(tabId));
   const setInspector = useUiStore((s) => s.setInspector);
+  const toggleInspector = useUiStore((s) => s.toggleInspector);
   const inspectorWidth = useUiStore((s) => s.inspectorWidth);
   const setInspectorWidth = useUiStore((s) => s.setInspectorWidth);
   const resetInspectorWidth = useUiStore((s) => s.resetInspectorWidth);
@@ -283,20 +284,21 @@ export function FilePane({ tabId }: { tabId: string }) {
   const handleFiles = useCallback(
     (fileList: FileList | null) => {
       if (!filesTab || !fileList || fileList.length === 0) return;
-      void upload(filesTab.connectionId, filesTab.path, Array.from(fileList)).then(() =>
-        store.getState().refresh(filesTab.id),
-      );
+      const items = Array.from(fileList).map((file) => ({ dirPath: filesTab.path, file }));
+      void useTransferStore
+        .getState()
+        .uploadBatchEntries(filesTab.connectionId, items)
+        .then(() => store.getState().refresh(filesTab.id));
     },
-    [filesTab, store, upload],
+    [filesTab, store],
   );
 
   /**
-   * Uploads a dropped tree: missing directories first, then the files, grouped by
-   * destination so each folder is one transfer batch.
+   * Uploads a dropped tree: missing directories first, then all files as a single batch.
    */
   const handleTree = useCallback(
     async (tree: DroppedTree) => {
-      if (!filesTab || tree.files.length === 0) return;
+      if (!filesTab || (tree.files.length === 0 && tree.directories.length === 0)) return;
       const { connectionId, path: base } = filesTab;
       const push = useUiStore.getState().pushToast;
 
@@ -312,15 +314,6 @@ export function FilePane({ tabId }: { tabId: string }) {
         }
       }
 
-      const groups = [...groupByDirectory(tree.files).entries()].sort((a, b) =>
-        a[0].localeCompare(b[0]),
-      );
-      for (const [directory, files] of groups) {
-        await upload(connectionId, directory === '' ? base : joinRemotePath(base, directory), files);
-      }
-
-      await store.getState().refresh(filesTab.id);
-
       if (tree.unsupported && tree.directories.length > 0) {
         push({ level: 'warn', title: t('files.folderUploadUnsupported') });
       } else if (failures.length > 0) {
@@ -328,15 +321,21 @@ export function FilePane({ tabId }: { tabId: string }) {
           level: 'warn',
           title: t('op.partialFailure', { count: failures.length, total: directories.length }),
         });
-      } else {
-        push({
-          level: 'success',
-          title: t('xfer.stateDone'),
-          detail: t('files.uploading', { count: tree.files.length }),
-        });
       }
+
+      const items = tree.files.map((df) => {
+        const relDir = parentRemotePath(df.relativePath) ?? '';
+        const dirPath = relDir === '' ? base : joinRemotePath(base, relDir);
+        return { dirPath, file: df.file };
+      });
+
+      if (items.length > 0) {
+        await useTransferStore.getState().uploadBatchEntries(connectionId, items);
+      }
+
+      await store.getState().refresh(filesTab.id);
     },
-    [filesTab, store, upload, t],
+    [filesTab, store, t],
   );
 
   useEffect(() => {
@@ -627,25 +626,20 @@ export function FilePane({ tabId }: { tabId: string }) {
           break;
         default:
           if (!(event.ctrlKey || event.metaKey)) break;
-          switch (event.key.toLowerCase()) {
-            case 'a':
-              event.preventDefault();
-              store.getState().selectAll(filesTab.id, displayOrder);
-              break;
-            case 'c':
-              event.preventDefault();
-              copySelection('copy');
-              break;
-            case 'x':
-              event.preventDefault();
-              copySelection('cut');
-              break;
-            case 'v':
-              event.preventDefault();
-              void runPaste();
-              break;
-            default:
-              break;
+          const k = event.key.toLowerCase();
+          const code = event.code;
+          if (k === 'a' || code === 'KeyA') {
+            event.preventDefault();
+            store.getState().selectAll(filesTab.id, displayOrder);
+          } else if (k === 'c' || code === 'KeyC') {
+            event.preventDefault();
+            copySelection('copy');
+          } else if (k === 'x' || code === 'KeyX') {
+            event.preventDefault();
+            copySelection('cut');
+          } else if (k === 'v' || code === 'KeyV') {
+            event.preventDefault();
+            void runPaste();
           }
       }
     },
@@ -849,31 +843,42 @@ export function FilePane({ tabId }: { tabId: string }) {
         paneRef.current?.focus({ preventScroll: true });
       }}
       onDragEnter={(event) => {
-        if (!event.dataTransfer?.types.includes('Files')) return;
+        if (!hasDropFiles(event.dataTransfer)) return;
+        event.preventDefault();
+        event.stopPropagation();
         dragDepth.current += 1;
         setDropping(true);
       }}
       onDragOver={(event) => {
-        if (!event.dataTransfer?.types.includes('Files')) return;
+        if (!hasDropFiles(event.dataTransfer)) return;
         event.preventDefault();
-        event.dataTransfer.dropEffect = 'copy';
+        event.stopPropagation();
+        if (event.dataTransfer) {
+          event.dataTransfer.dropEffect = 'copy';
+        }
       }}
-      onDragLeave={() => {
+      onDragLeave={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
         dragDepth.current = Math.max(0, dragDepth.current - 1);
         if (dragDepth.current === 0) setDropping(false);
       }}
       onDrop={(event) => {
-        if (!event.dataTransfer?.types.includes('Files')) return;
+        if (!hasDropFiles(event.dataTransfer)) return;
         event.preventDefault();
+        event.stopPropagation();
         dragDepth.current = 0;
         setDropping(false);
-        // Walk folders through webkitGetAsEntry; the flat FileList cannot.
-        void collectDroppedTree(event.dataTransfer).then((tree) => handleTree(tree));
+        const dt = event.dataTransfer;
+        if (dt) {
+          void collectDroppedTree(dt).then((tree) => handleTree(tree));
+        }
       }}
     >
       <FileToolbar
         tab={filesTab}
         home={connection?.serverInfo?.home}
+        isFtp={connection?.protocol === 'ftp'}
         canBack={canBack}
         canForward={canForward}
         canUp={canUp}
@@ -900,6 +905,8 @@ export function FilePane({ tabId }: { tabId: string }) {
         onOpenTerminal={() =>
           connection && openTerminalTab(connection.id, connection.label, filesTab.path)
         }
+        inspectorOpen={inspectorOpen}
+        onToggleInspector={() => toggleInspector(tabId)}
       />
 
       {filesTab.searchResults ? (
@@ -1028,7 +1035,7 @@ export function FilePane({ tabId }: { tabId: string }) {
                   }
                 : null
             }
-            onClose={() => setInspector(false)}
+            onClose={() => setInspector(false, tabId)}
             onOpen={openEntry}
             onArchive={(paths) => setArchiveTargets(paths)}
             onExtract={(entry) => setExtractTarget(entry)}
@@ -1036,16 +1043,23 @@ export function FilePane({ tabId }: { tabId: string }) {
             onDownload={downloadEntry}
             onMeasureUsage={
               connection
-                ? () =>
-                    void store
-                      .getState()
-                      .measureUsage(filesTab.id, [
-                        filesTab.path,
-                        ...visible.filter((entry) => entry.kind === 'directory').map((entry) => entry.path),
-                      ])
+                ? (paths) => {
+                    const targets =
+                      paths && paths.length > 0
+                        ? paths
+                        : filesTab.selection.length > 0
+                          ? visible
+                              .filter((entry) => filesTab.selection.includes(entry.path))
+                              .map((entry) => entry.path)
+                          : [filesTab.path];
+                    if (targets.length > 0) {
+                      void store.getState().measureUsage(filesTab.id, targets);
+                    }
+                  }
                 : null
             }
             measuring={filesTab.measuring.length > 0}
+            measuringPaths={filesTab.measuring}
             usage={filesTab.usage}
             onExec={(entry) => {
               setExecEntry(entry);

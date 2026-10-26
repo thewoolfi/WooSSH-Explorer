@@ -2,6 +2,39 @@
 
 All notable changes to WooSSH will be documented in this file.
 
+## [1.3.0] - 2026-10-26
+
+### Added
+- **FTP Protocol Support & Stability:**
+  - Full FTP/FTPS connection support alongside SFTP/SSH.
+  - Protocol switcher in Connection Dialog with automatic default port assignment (21 for FTP, 22 for SFTP).
+  - Serialised control command queue to avoid FTP command collisions, and dedicated streaming clients for concurrent file transfers with fast fallback.
+  - FTP visual badges on connection cards and saved profiles in the sidebar.
+  - Archive creation and extraction support over FTP via streaming readers/writers.
+  - Profile persistence fix: `protocol: 'ftp'` saved correctly in configuration store across application restarts.
+  - Stream completion synchronization: FTP file writes now reliably await the server's `226 Transfer complete` response before marking uploads done, eliminating premature queue clears and socket collisions.
+- **Upload Queue & Batch Progress Tracking:**
+  - Pre-upload file evaluation: automatically analyzes and announces total file count and size before transmission starts.
+  - Real-time progress display in the Transfer Dock, Transfer View, and Status Bar: shows `X / Y files (remaining: Z) · P%` with progress bar.
+  - Client-side concurrency control pool (`runPool`) with `maxConcurrent` transfers to prevent browser socket exhaustion on large directory uploads.
+  - Persistent completion notification (*«Все файлы загружены»*) that stays visible until manually dismissed by clicking `✕`.
+  - Fixed 401 unauthenticated upload error on desktop Electron by forwarding auth token headers in `api.upload`.
+- **Server State Disk Space Separation & Filtering:**
+  - Filtered out in-memory and ephemeral pseudo-filesystems (`tmpfs`, `devtmpfs`, `devfs`, `efivarfs`, `ramfs`, `/run/*`, `/sys/*`, `/dev/*`, `/dev/shm`) from the server disks list.
+  - Separated disks in Server Status dialog into **Local Disks** (physical OS storage: `/`, `/boot`, `/boot/efi`, `/home`, LVM/RAID) and **Mounted Storages** (`/mnt/*`, `/media/*`, NFS, CIFS/SMB, SSHFS).
+  - Status bar disk percentage calculation accounts strictly for local host disks, excluding external mounts and NAS drives.
+- **Multi-Selection Size Calculation:**
+  - Added button to calculate sizes of multiple selected items at once.
+  - Dynamically labeled "Подсчитать размер элемента" for single items and "Подсчитать размеры элементов" for multiple items.
+- **Per-Tab Independent Inspector in Split View:**
+  - The inspector toggle state is now scoped to individual tabs/panes in split mode.
+  - Toggling or closing the inspector on one side no longer affects the other side.
+  - Added quick inspector toggle button directly on the file toolbar for each pane.
+- **Layout-Independent Hotkeys:**
+  - Keyboard shortcuts (`Ctrl+C`, `Ctrl+V`, `Ctrl+X`, `Ctrl+A`, and global hotkeys) now work seamlessly across non-English keyboard layouts (Russian, etc.) by matching physical key codes.
+
+---
+
 ## [1.2.0] - 2026-10-23
 
 ### Added

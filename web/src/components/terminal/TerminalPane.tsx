@@ -43,11 +43,13 @@ export function TerminalPane({
   connectionId,
   title,
   cwd,
+  tabId,
 }: {
   connectionId: string;
   title: string;
   /** Directory to move the shell into once it has started. */
   cwd?: string;
+  tabId?: string;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
@@ -58,7 +60,7 @@ export function TerminalPane({
   const terminalFontSize = useUiStore((s) => s.terminalFontSize);
   const setTerminalFontSize = useUiStore((s) => s.setTerminalFontSize);
   const copyOnSelect = useUiStore((s) => s.copyOnSelect);
-  const inspectorOpen = useUiStore((s) => s.inspectorOpen);
+  const inspectorOpen = useUiStore((s) => s.isInspectorOpen(tabId));
   const setInspector = useUiStore((s) => s.setInspector);
   const toggleInspector = useUiStore((s) => s.toggleInspector);
   const inspectorWidth = useUiStore((s) => s.inspectorWidth);
@@ -433,7 +435,7 @@ export function TerminalPane({
           variant={inspectorOpen ? 'secondary' : 'ghost'}
           size="sm"
           icon="sliders"
-          onClick={() => toggleInspector()}
+          onClick={() => toggleInspector(tabId)}
           title={t(inspectorOpen ? 'topbar.hideInspector' : 'topbar.showInspector')}
         >
           {t('palette.toggleInspector')}
@@ -475,7 +477,7 @@ export function TerminalPane({
             width={inspectorWidth}
             onWidthChange={setInspectorWidth}
             onWidthReset={resetInspectorWidth}
-            onClose={() => setInspector(false)}
+            onClose={() => setInspector(false, tabId)}
             onRunCommand={(cmd) => {
               const socket = socketRef.current;
               if (socket && socket.readyState === WebSocket.OPEN) {

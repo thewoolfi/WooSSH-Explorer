@@ -13,7 +13,7 @@ import { parseBody, parseParams } from './validate.js';
 const authSchema = z.discriminatedUnion('method', [
   z.object({
     method: z.literal('password'),
-    password: z.string().min(1).max(4096),
+    password: z.string().max(4096),
   }),
   z.object({
     method: z.literal('privateKey'),
@@ -29,6 +29,7 @@ const authSchema = z.discriminatedUnion('method', [
 
 const connectSchema = z.object({
   profileId: z.string().min(1).max(200).optional(),
+  protocol: z.enum(['sftp', 'ftp']).optional(),
   label: z.string().trim().min(1).max(200).optional(),
   color: z
     .string()
@@ -43,7 +44,7 @@ const connectSchema = z.object({
   /** Reuse a stored credential; defaults to `true` when `auth` is absent. */
   useStoredSecret: z.boolean().optional(),
   trustHostKey: z.boolean().optional(),
-  hostKeyFingerprint: z.string().min(7).max(200).optional(),
+  hostKeyFingerprint: z.string().min(1).max(200).optional(),
 });
 
 const execSchema = z.object({
@@ -109,7 +110,8 @@ export function registerConnectionRoutes(router: Router, ctx: RouteContext): voi
 
     const host = body.host ?? profile?.host;
     const port = body.port ?? profile?.port ?? 22;
-    const username = body.username ?? profile?.username;
+    const protocol = body.protocol ?? profile?.protocol ?? (port === 21 ? 'ftp' : 'sftp');
+    const username = body.username ?? profile?.username ?? (protocol === 'ftp' ? 'anonymous' : undefined);
     if (host === undefined || username === undefined) {
       throw badRequest('host and username are required (directly or through profileId).', {
         issues: [
@@ -136,14 +138,19 @@ export function registerConnectionRoutes(router: Router, ctx: RouteContext): voi
     if (resolved === null) resolved = credentialsFromAuth(undefined, profile);
 
     if (resolved === null) {
-      throw badRequest(
-        'An auth block is required, or save credentials for this host first.',
-        { path: ['auth'] },
-      );
+      if (protocol === 'ftp') {
+        resolved = { credentials: { method: 'password', password: '' }, authMethod: 'password' };
+      } else {
+        throw badRequest(
+          'An auth block is required, or save credentials for this host first.',
+          { path: ['auth'] },
+        );
+      }
     }
 
     const outcome = await ctx.connections.connect(
       {
+        protocol,
         host,
         port,
         username,

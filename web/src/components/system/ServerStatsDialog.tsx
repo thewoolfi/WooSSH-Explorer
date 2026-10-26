@@ -1,8 +1,10 @@
-﻿import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import type { RemoteSystemStats } from '../../api/types';
 import { useConnectionStore } from '../../state/connectionStore';
 import { useSystemStatsStore } from '../../state/systemStatsStore';
 import { useUiStore } from '../../state/uiStore';
 import { formatBytes, formatRelative } from '../../lib/format';
+import { getDiskKind } from '../../lib/disks';
 import { useT } from '../../i18n/useT';
 import { Button, EmptyState, Progress, Spinner } from '../ui/Primitives';
 import { Modal } from '../ui/Overlays';
@@ -51,6 +53,15 @@ export function ServerStatsDialog() {
   }, [open, load]);
 
   const stats = cached?.stats ?? null;
+
+  const localDisks = stats?.disks.filter((d) => getDiskKind(d) === 'local') ?? [];
+  const externalDisks = stats?.disks.filter((d) => getDiskKind(d) === 'external') ?? [];
+  const pseudoDisks = stats?.disks.filter((d) => getDiskKind(d) === 'pseudo') ?? [];
+
+  const hasLocal = localDisks.length > 0;
+  const hasExternal = externalDisks.length > 0;
+  const showPseudoFallback = !hasLocal && !hasExternal && pseudoDisks.length > 0;
+  const displayLocal = hasLocal ? localDisks : (showPseudoFallback ? pseudoDisks : []);
 
   return (
     <Modal
@@ -131,29 +142,49 @@ export function ServerStatsDialog() {
 
           <section className="stats__disks">
             <h3 className="label">{t('server.disks')}</h3>
-            {stats.disks.length === 0 ? (
+            {displayLocal.length === 0 ? (
               <p className="pathnote">{t('server.unavailable')}</p>
             ) : (
-              stats.disks.map((disk) => (
-                <div key={`${disk.filesystem}-${disk.mount}`} className="stats__disk">
-                  <div className="stats__diskhead">
-                    <span className="mono truncate" title={disk.filesystem}>
-                      {disk.mount}
-                    </span>
-                    <span className="spacer" />
-                    <span className="pathnote mono">
-                      {formatBytes(disk.usedBytes)} / {formatBytes(disk.sizeBytes)} {MIDDOT}{' '}
-                      {percentOf(disk.usedBytes, disk.sizeBytes).toFixed(0)}%
-                    </span>
-                  </div>
-                  <Progress value={disk.usedBytes} max={disk.sizeBytes > 0 ? disk.sizeBytes : 1} />
-                </div>
+              displayLocal.map((disk) => (
+                <DiskItem key={`${disk.filesystem}-${disk.mount}`} disk={disk} />
               ))
             )}
           </section>
+
+          {hasExternal ? (
+            <section className="stats__disks">
+              <h3 className="label">{t('server.mountedDisks')}</h3>
+              {externalDisks.map((disk) => (
+                <DiskItem key={`${disk.filesystem}-${disk.mount}`} disk={disk} isExternal />
+              ))}
+            </section>
+          ) : null}
         </div>
       )}
     </Modal>
+  );
+}
+
+function DiskItem({ disk, isExternal }: { disk: RemoteSystemStats['disks'][number]; isExternal?: boolean }) {
+  return (
+    <div className="stats__disk">
+      <div className="stats__diskhead">
+        <span className="mono truncate" title={disk.filesystem}>
+          {disk.mount}
+          {isExternal && disk.filesystem && disk.filesystem !== disk.mount ? (
+            <span className="pathnote" style={{ marginLeft: 'var(--sp-2)', fontSize: 'var(--fs-xs)' }}>
+              ({disk.filesystem})
+            </span>
+          ) : null}
+        </span>
+        <span className="spacer" />
+        <span className="pathnote mono">
+          {formatBytes(disk.usedBytes)} / {formatBytes(disk.sizeBytes)} {MIDDOT}{' '}
+          {percentOf(disk.usedBytes, disk.sizeBytes).toFixed(0)}%
+        </span>
+      </div>
+      <Progress value={disk.usedBytes} max={disk.sizeBytes > 0 ? disk.sizeBytes : 1} />
+    </div>
   );
 }
 

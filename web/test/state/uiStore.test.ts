@@ -152,6 +152,23 @@ describe('uiStore preferences', () => {
     expect(prefs().sidebarOpen).toBe(false);
   });
 
+  test('toggles the inspector independently for separate tabs', () => {
+    store().setInspector(true);
+    expect(store().isInspectorOpen('tab-left')).toBe(true);
+    expect(store().isInspectorOpen('tab-right')).toBe(true);
+
+    store().toggleInspector('tab-left');
+    expect(store().isInspectorOpen('tab-left')).toBe(false);
+    expect(store().isInspectorOpen('tab-right')).toBe(true);
+
+    store().setInspector(false, 'tab-right');
+    expect(store().isInspectorOpen('tab-right')).toBe(false);
+
+    store().setInspector(true, 'tab-left');
+    expect(store().isInspectorOpen('tab-left')).toBe(true);
+    expect(store().isInspectorOpen('tab-right')).toBe(false);
+  });
+
   test('showHidden is persisted so the choice survives a reload', () => {
     store().setShowHidden(true);
 
@@ -177,6 +194,7 @@ describe('uiStore preferences', () => {
     expect(store().connectionDialog).toEqual({
       open: true,
       profile: null,
+      protocol: undefined,
       host: undefined,
       username: undefined,
       port: undefined,

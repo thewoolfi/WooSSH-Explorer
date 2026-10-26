@@ -235,6 +235,7 @@ export function TransferDock() {
   const setDockView = useUiStore((s) => s.setDockView);
 
   const transfers = useTransferStore((s) => s.transfers);
+  const uploadBatch = useTransferStore((s) => s.uploadBatch);
   const clearFinished = useTransferStore((s) => s.clearFinished);
   const { t } = useT();
   const announcement = useTransferAnnouncements(transfers);
@@ -283,7 +284,13 @@ export function TransferDock() {
             onClick={() => setDockView('transfers')}
           >
             {t('xfer.queue')}
-            {active.length ? <span className="dock__badge mono">{active.length}</span> : null}
+            {uploadBatch && uploadBatch.inProgress ? (
+              <span className="dock__badge mono" title={`${uploadBatch.completedFiles} / ${uploadBatch.totalFiles}`}>
+                {uploadBatch.completedFiles}/{uploadBatch.totalFiles}
+              </span>
+            ) : active.length ? (
+              <span className="dock__badge mono">{active.length}</span>
+            ) : null}
           </button>
         </div>
         <span className="spacer" />
@@ -296,6 +303,33 @@ export function TransferDock() {
         ) : null}
         <IconButton icon="close" label={t('xfer.hidePanel')} size={14} onClick={() => toggleDock()} />
       </header>
+
+      {uploadBatch && (uploadBatch.inProgress || uploadBatch.completedFiles + uploadBatch.failedFiles < uploadBatch.totalFiles) ? (
+        <div className="dock__batch-banner">
+          <div className="dock__batch-info">
+            <span className="dock__batch-label">
+              <Icon name="upload" size={13} />
+              <span>
+                {t('xfer.uploadProgress', {
+                  completed: uploadBatch.completedFiles,
+                  total: uploadBatch.totalFiles,
+                  remaining: Math.max(0, uploadBatch.totalFiles - uploadBatch.completedFiles - uploadBatch.failedFiles),
+                })}
+              </span>
+            </span>
+            <span className="spacer" />
+            <span className="dock__batch-percent mono">
+              {uploadBatch.totalFiles > 0
+                ? `${Math.round(((uploadBatch.completedFiles + uploadBatch.failedFiles) / uploadBatch.totalFiles) * 100)}%`
+                : ''}
+            </span>
+          </div>
+          <Progress
+            value={uploadBatch.completedFiles + uploadBatch.failedFiles}
+            max={uploadBatch.totalFiles > 0 ? uploadBatch.totalFiles : 1}
+          />
+        </div>
+      ) : null}
 
       {/* Transitions only — see useTransferAnnouncements. */}
       <div className="sr-only" role="status" aria-live="polite">
@@ -322,6 +356,7 @@ export function TransferDock() {
 
 export function TransferView() {
   const transfers = useTransferStore((s) => s.transfers);
+  const uploadBatch = useTransferStore((s) => s.uploadBatch);
   const clearFinished = useTransferStore((s) => s.clearFinished);
   const { t } = useT();
   const announcement = useTransferAnnouncements(transfers);
@@ -349,6 +384,32 @@ export function TransferView() {
       </div>
 
       <div className="xferview__body scroll-y">
+        {uploadBatch && (uploadBatch.inProgress || uploadBatch.completedFiles + uploadBatch.failedFiles < uploadBatch.totalFiles) ? (
+          <div className="dock__batch-banner" style={{ margin: 'var(--sp-4) var(--sp-4) 0 var(--sp-4)', borderRadius: 'var(--r-md)' }}>
+            <div className="dock__batch-info">
+              <span className="dock__batch-label">
+                <Icon name="upload" size={13} />
+                <span>
+                  {t('xfer.uploadProgress', {
+                    completed: uploadBatch.completedFiles,
+                    total: uploadBatch.totalFiles,
+                    remaining: Math.max(0, uploadBatch.totalFiles - uploadBatch.completedFiles - uploadBatch.failedFiles),
+                  })}
+                </span>
+              </span>
+              <span className="spacer" />
+              <span className="dock__batch-percent mono">
+                {uploadBatch.totalFiles > 0
+                  ? `${Math.round(((uploadBatch.completedFiles + uploadBatch.failedFiles) / uploadBatch.totalFiles) * 100)}%`
+                  : ''}
+              </span>
+            </div>
+            <Progress
+              value={uploadBatch.completedFiles + uploadBatch.failedFiles}
+              max={uploadBatch.totalFiles > 0 ? uploadBatch.totalFiles : 1}
+            />
+          </div>
+        ) : null}
         {transfers.length === 0 ? (
           <EmptyState icon="transfer" title={t('xfer.nothingYet')} detail={t('xfer.nothingYetHint')} />
         ) : (

@@ -221,7 +221,7 @@ export function CommandPalette() {
         icon: 'panel-right',
         group: 'View',
         shortcut: 'Ctrl I',
-        run: () => toggleInspector(),
+        run: () => toggleInspector(activeTabId ?? undefined),
       },
       {
         id: 'clear-transfers',

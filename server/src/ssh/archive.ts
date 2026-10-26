@@ -11,7 +11,10 @@ import { safeArchiveEntryPath, safeArchiveLinkTarget } from '../util/archivePath
 import { basename, isInsideRemotePath, joinRemotePath, normalizeRemotePath, parentRemotePath } from '../util/remotePath.js';
 import { execToolUnavailable, shellQuote } from './fsOps.js';
 import type { SftpFs } from './fsOps.js';
-import type { SshConnection } from './SshConnection.js';
+import type { FtpFs } from '../ftp/FtpFs.js';
+import type { ManagedConnection } from './SshConnectionManager.js';
+
+type AnyFs = SftpFs | FtpFs;
 import {
   TAR_BLOCK_SIZE,
   gnuLongNameBlocks,
@@ -87,8 +90,8 @@ interface ArchiveItem {
 // ----------------------------------------------------------------- creation
 
 export async function createArchive(
-  connection: SshConnection,
-  fs: SftpFs,
+  connection: ManagedConnection,
+  fs: AnyFs,
   logger: Logger,
   request: ArchiveRequest,
 ): Promise<ArchiveResult> {
@@ -177,8 +180,8 @@ export function buildUnzipCommand(archivePath: string, destinationDir: string, o
 
 /** Runs the remote archiver; `false` means "not available, use the SFTP writer". */
 async function archiveViaExec(
-  connection: SshConnection,
-  fs: SftpFs,
+  connection: ManagedConnection,
+  fs: AnyFs,
   logger: Logger,
   format: ArchiveFormat,
   destination: string,
@@ -223,7 +226,7 @@ async function archiveViaExec(
 }
 
 /** Walks the sources into archive entries: directories recurse, symlinks stay symlinks. */
-export async function collectArchiveItems(fs: SftpFs, sources: { path: string }[]): Promise<ArchiveItem[]> {
+export async function collectArchiveItems(fs: AnyFs, sources: { path: string }[]): Promise<ArchiveItem[]> {
   const items: ArchiveItem[] = [];
   for (const source of sources) {
     await collectOne(fs, source.path, basename(source.path), items, 0);
@@ -232,7 +235,7 @@ export async function collectArchiveItems(fs: SftpFs, sources: { path: string }[
 }
 
 async function collectOne(
-  fs: SftpFs,
+  fs: AnyFs,
   remotePath: string,
   name: string,
   out: ArchiveItem[],
@@ -291,7 +294,7 @@ async function collectOne(
 
 /** Writes a tar/tar.gz through the SFTP session (no remote `tar` needed). */
 async function writeTarArchive(
-  fs: SftpFs,
+  fs: AnyFs,
   destination: string,
   items: ArchiveItem[],
   format: 'tar' | 'tar.gz',
@@ -317,7 +320,7 @@ async function writeTarArchive(
   }
 }
 
-async function writeTarEntry(fs: SftpFs, sink: Writable, item: ArchiveItem): Promise<void> {
+async function writeTarEntry(fs: AnyFs, sink: Writable, item: ArchiveItem): Promise<void> {
   if (Buffer.byteLength(item.name, 'utf8') > 100 && splitUstarName(item.name) === null) {
     const { header, data } = gnuLongNameBlocks(item.name);
     await writeAll(sink, header);
@@ -354,7 +357,7 @@ async function writeTarEntry(fs: SftpFs, sink: Writable, item: ArchiveItem): Pro
 }
 
 /** Writes a zip through `yazl`; symlinks have no portable zip representation and are skipped. */
-async function writeZipArchive(fs: SftpFs, destination: string, items: ArchiveItem[], logger: Logger): Promise<void> {
+async function writeZipArchive(fs: AnyFs, destination: string, items: ArchiveItem[], logger: Logger): Promise<void> {
   const zip = new yazl.ZipFile();
   const output = zip.outputStream as unknown as Readable;
   const streams = new Set<Readable>();
@@ -422,8 +425,8 @@ interface ArchiveListing {
 }
 
 export async function extractArchive(
-  connection: SshConnection,
-  fs: SftpFs,
+  connection: ManagedConnection,
+  fs: AnyFs,
   logger: Logger,
   request: ExtractRequest,
 ): Promise<ExtractResult> {
@@ -482,7 +485,7 @@ export async function extractArchive(
 }
 
 /** Sniffs the format from the archive's own bytes, never from its name (contract §6). */
-export async function detectArchiveFormat(fs: SftpFs, archivePath: string, size: number): Promise<ArchiveFormat | null> {
+export async function detectArchiveFormat(fs: AnyFs, archivePath: string, size: number): Promise<ArchiveFormat | null> {
   const head = await fs.readRange(archivePath, 0, Math.min(TAR_BLOCK_SIZE - 1, size - 1));
   if (head.length >= 2 && head[0] === 0x1f && head[1] === 0x8b) return 'tar.gz';
   if (looksLikeZip(head)) return 'zip';
@@ -491,7 +494,7 @@ export async function detectArchiveFormat(fs: SftpFs, archivePath: string, size:
 }
 
 async function extractViaExec(
-  connection: SshConnection,
+  connection: ManagedConnection,
   logger: Logger,
   command: string,
   tool: 'tar' | 'unzip',
@@ -518,7 +521,7 @@ async function extractViaExec(
   }
 }
 
-async function listTarEntries(fs: SftpFs, archivePath: string, format: 'tar' | 'tar.gz'): Promise<ArchiveListing> {
+async function listTarEntries(fs: AnyFs, archivePath: string, format: 'tar' | 'tar.gz'): Promise<ArchiveListing> {
   const reader = await openArchiveReader(fs, archivePath, format === 'tar.gz');
   const items: ArchiveRawEntry[] = [];
   let truncated = false;
@@ -567,7 +570,7 @@ async function listTarEntries(fs: SftpFs, archivePath: string, format: 'tar' | '
 }
 
 async function listZipEntries(
-  fs: SftpFs,
+  fs: AnyFs,
   archivePath: string,
   size: number,
   logger: Logger,
@@ -607,7 +610,7 @@ async function listZipEntries(
   return { items, truncated: directory.truncated };
 }
 
-async function readZipLinkTarget(fs: SftpFs, archivePath: string, entry: ZipEntryMeta): Promise<string | null> {
+async function readZipLinkTarget(fs: AnyFs, archivePath: string, entry: ZipEntryMeta): Promise<string | null> {
   if (entry.uncompressedSize <= 0 || entry.uncompressedSize > MAX_ZIP_LINK_TARGET_BYTES) return null;
   const header = parseZipLocalHeader(
     await fs.readRange(archivePath, entry.localHeaderOffset, entry.localHeaderOffset + 29),
@@ -660,7 +663,7 @@ export function validateExtractItems(raw: ArchiveRawEntry[], destinationDir: str
 }
 
 async function extractTarEntries(
-  fs: SftpFs,
+  fs: AnyFs,
   archivePath: string,
   format: 'tar' | 'tar.gz',
   items: ExtractItem[],
@@ -708,7 +711,7 @@ async function extractTarEntries(
 }
 
 async function extractTarItem(
-  fs: SftpFs,
+  fs: AnyFs,
   item: ExtractItem,
   reader: ArchiveReader,
   parsed: TarReadEntry,
@@ -759,7 +762,7 @@ async function extractTarItem(
 }
 
 async function extractZipEntries(
-  fs: SftpFs,
+  fs: AnyFs,
   archivePath: string,
   items: ExtractItem[],
   overwrite: boolean,
@@ -838,7 +841,7 @@ class ExistingDirs {
   private readonly known = new Set<string>(['/']);
 
   constructor(
-    private readonly fs: SftpFs,
+    private readonly fs: AnyFs,
     root: string,
   ) {
     let current = normalizeRemotePath(root);
@@ -865,7 +868,7 @@ class ExistingDirs {
 }
 
 /** Removes an existing entry so the new one is created cleanly (`overwrite` semantics). */
-async function replaceTarget(fs: SftpFs, target: string, overwrite: boolean): Promise<void> {
+async function replaceTarget(fs: AnyFs, target: string, overwrite: boolean): Promise<void> {
   if (!overwrite) return;
   if (!(await fs.exists(target))) return;
   const removed = await fs.remove([target], true);
@@ -876,7 +879,7 @@ async function replaceTarget(fs: SftpFs, target: string, overwrite: boolean): Pr
 
 /** The response lists the entries that appeared at the top level of `destinationDir`. */
 async function collectExtractedEntries(
-  fs: SftpFs,
+  fs: AnyFs,
   destinationDir: string,
   items: ExtractItem[],
 ): Promise<{ entries: FileEntry[]; truncated: boolean }> {
@@ -989,7 +992,7 @@ class ArchiveReader {
   }
 }
 
-async function openArchiveReader(fs: SftpFs, archivePath: string, gzipped: boolean): Promise<ArchiveReader> {
+async function openArchiveReader(fs: AnyFs, archivePath: string, gzipped: boolean): Promise<ArchiveReader> {
   const file = await fs.openReadStream(archivePath);
   if (!gzipped) return new ArchiveReader(file);
   const gunzip = zlib.createGunzip();

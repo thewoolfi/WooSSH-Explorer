@@ -26,8 +26,9 @@ export function TopBar() {
   const setServerStatsOpen = useUiStore((s) => s.setServerStatsOpen);
   const setKnownHostsOpen = useUiStore((s) => s.setKnownHostsOpen);
   const setDiagnosticsOpen = useUiStore((s) => s.setDiagnosticsOpen);
+  const activeTabId = useExplorerStore((s) => s.activeTabId);
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
-  const inspectorOpen = useUiStore((s) => s.inspectorOpen);
+  const inspectorOpen = useUiStore((s) => s.isInspectorOpen(activeTabId ?? undefined));
   const setCommandPalette = useUiStore((s) => s.setCommandPalette);
   const openConnectionDialog = useUiStore((s) => s.openConnectionDialog);
   const pushToast = useUiStore((s) => s.pushToast);
@@ -127,7 +128,7 @@ export function TopBar() {
           icon="panel-right"
           label={t(inspectorOpen ? 'topbar.hideInspector' : 'topbar.showInspector')}
           active={inspectorOpen}
-          onClick={toggleInspector}
+          onClick={() => toggleInspector(activeTabId ?? undefined)}
         />
         <button
           type="button"

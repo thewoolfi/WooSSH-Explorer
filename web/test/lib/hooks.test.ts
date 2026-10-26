@@ -37,6 +37,12 @@ describe('matchesCombo', () => {
     expect(matchesCombo(keydown({ key: 'k', shiftKey: true }), 'k')).toBe(false);
   });
 
+  test('matches letter keys even when on non-English layout via event.code', () => {
+    expect(matchesCombo(keydown({ key: 'л', code: 'KeyK', ctrlKey: true }), 'mod+k')).toBe(true);
+    expect(matchesCombo(keydown({ key: 'с', code: 'KeyC', ctrlKey: true }), 'mod+c')).toBe(true);
+    expect(matchesCombo(keydown({ key: 'м', code: 'KeyV', ctrlKey: true }), 'mod+v')).toBe(true);
+  });
+
   test('the key comparison is case-insensitive', () => {
     expect(matchesCombo(keydown({ key: 'K', ctrlKey: true }), 'mod+k')).toBe(true);
     expect(matchesCombo(keydown({ key: 'F5' }), 'f5')).toBe(true);

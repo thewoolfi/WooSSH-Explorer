@@ -2,13 +2,17 @@ import { EventEmitter } from 'node:events';
 
 import { ApiError, notFound } from '../errors.js';
 import type { Logger } from '../logger.js';
-import type { ConnectionSummary, ServerInfo } from '../types.js';
+import type { ConnectionSummary, Protocol, ServerInfo } from '../types.js';
 import type { KnownHostsStore } from './hostKeys.js';
 import { SshConnection } from './SshConnection.js';
 import type { SshConnectionOptions, SshCredentials } from './SshConnection.js';
+import { FtpConnection } from '../ftp/FtpConnection.js';
+
+export type ManagedConnection = SshConnection | FtpConnection;
 
 export interface ConnectRequest {
   profileId?: string;
+  protocol?: Protocol;
   label?: string;
   color?: string;
   host: string;
@@ -20,7 +24,7 @@ export interface ConnectRequest {
 }
 
 export interface ConnectOutcome {
-  connection: SshConnection;
+  connection: ManagedConnection;
   summary: ConnectionSummary;
   /** `true` when an already-open connection for the same triple was reused (HTTP 200 vs 201). */
   reused: boolean;
@@ -32,14 +36,14 @@ export interface SshConnectionManagerOptions {
 }
 
 /**
- * Owns every {@link SshConnection} for the process lifetime.
+ * Owns every {@link ManagedConnection} for the process lifetime.
  *
- * Contract §5: only one active connection per `(host, port, username)` triple is ever created;
+ * Contract §5: only one active connection per `(protocol, host, port, username)` tuple is ever created;
  * asking twice returns the existing summary. Every status change is republished as the
  * `connection:status` / `connection:closed` events of §8.
  */
 export class SshConnectionManager extends EventEmitter {
-  private readonly connections = new Map<string, SshConnection>();
+  private readonly connections = new Map<string, ManagedConnection>();
   private readonly byTriple = new Map<string, string>();
   private closed = false;
 
@@ -47,8 +51,8 @@ export class SshConnectionManager extends EventEmitter {
     super();
   }
 
-  private static triple(host: string, port: number, username: string): string {
-    return `${host}\u0000${port}\u0000${username}`;
+  private static triple(protocol: Protocol | undefined, host: string, port: number, username: string): string {
+    return `${protocol ?? 'sftp'}\u0000${host}\u0000${port}\u0000${username}`;
   }
 
   /** All connections, newest last. */
@@ -57,12 +61,12 @@ export class SshConnectionManager extends EventEmitter {
   }
 
   /** `:id` accepts a connection id (contract §5). */
-  get(id: string): SshConnection | undefined {
+  get(id: string): ManagedConnection | undefined {
     return this.connections.get(id);
   }
 
   /** `:id` accepts a connection id, a saved profile id, or `host:port` (contract §5). */
-  getOrThrow(id: string, profileId?: string): SshConnection {
+  getOrThrow(id: string, profileId?: string): ManagedConnection {
     const direct = this.connections.get(id);
     if (direct !== undefined) return direct;
 
@@ -72,7 +76,7 @@ export class SshConnectionManager extends EventEmitter {
     throw notFound(`Unknown connection: ${id}.`);
   }
 
-  findByProfileId(profileId: string): SshConnection | undefined {
+  findByProfileId(profileId: string): ManagedConnection | undefined {
     for (const connection of this.connections.values()) {
       if (connection.profileId === profileId) return connection;
     }
@@ -83,7 +87,8 @@ export class SshConnectionManager extends EventEmitter {
   async connect(request: ConnectRequest, profileId?: string): Promise<ConnectOutcome> {
     if (this.closed) throw new ApiError('CONNECT_FAILED', 'The server is shutting down.', { reason: 'SHUTDOWN' });
 
-    const key = SshConnectionManager.triple(request.host, request.port, request.username);
+    const protocol = request.protocol ?? 'sftp';
+    const key = SshConnectionManager.triple(protocol, request.host, request.port, request.username);
     const existingId = this.byTriple.get(key);
     if (existingId !== undefined) {
       const existing = this.connections.get(existingId);
@@ -97,10 +102,24 @@ export class SshConnectionManager extends EventEmitter {
       }
     }
 
-    const connection = new SshConnection({
-      ...this.buildOptions(request),
-      ...(profileId !== undefined ? {} : {}),
-    });
+    let connection: ManagedConnection;
+    if (protocol === 'ftp') {
+      const password = request.credentials.method === 'password' ? request.credentials.password : '';
+      connection = new FtpConnection({
+        host: request.host,
+        port: request.port,
+        username: request.username,
+        password,
+        ...(request.label !== undefined ? { label: request.label } : {}),
+        ...(request.color !== undefined ? { color: request.color } : {}),
+        logger: this.options.logger,
+      });
+    } else {
+      connection = new SshConnection({
+        ...this.buildOptions(request),
+        ...(profileId !== undefined ? {} : {}),
+      });
+    }
     if (profileId !== undefined) connection.profileId = profileId;
 
     this.attach(connection, key);
@@ -137,7 +156,7 @@ export class SshConnectionManager extends EventEmitter {
     return options;
   }
 
-  private attach(connection: SshConnection, tripleKey: string): void {
+  private attach(connection: ManagedConnection, tripleKey: string): void {
     this.connections.set(connection.id, connection);
     this.byTriple.set(tripleKey, connection.id);
 
@@ -153,7 +172,7 @@ export class SshConnectionManager extends EventEmitter {
     const connection = this.connections.get(id);
     if (connection === undefined) return;
     this.connections.delete(id);
-    const key = SshConnectionManager.triple(connection.host, connection.port, connection.username);
+    const key = SshConnectionManager.triple(connection.protocol, connection.host, connection.port, connection.username);
     if (this.byTriple.get(key) === id) this.byTriple.delete(key);
     connection.removeAllListeners();
     connection.close('Connection failed.');

@@ -35,13 +35,15 @@ export type ConnectPlan =
 export function planProfileConnect(input: {
   profile: Pick<
     SavedProfile,
-    'id' | 'label' | 'host' | 'port' | 'username' | 'authMethod' | 'privateKeyPath' | 'color'
+    'id' | 'label' | 'host' | 'port' | 'username' | 'authMethod' | 'protocol' | 'privateKeyPath' | 'color'
   >;
   /** Whether the vault holds a credential for this host. */
   hasStoredSecret: boolean;
 }): ConnectPlan {
   const { profile, hasStoredSecret } = input;
+  const protocol = profile.protocol ?? (profile.port === 21 ? 'ftp' : 'sftp');
   const request: ConnectRequest = {
+    protocol,
     host: profile.host,
     port: profile.port,
     username: profile.username,
@@ -50,6 +52,13 @@ export function planProfileConnect(input: {
     profileId: profile.id,
     useStoredSecret: true,
   };
+
+  if (protocol === 'ftp') {
+    if (hasStoredSecret) return { kind: 'connect', request };
+    if (profile.username === 'anonymous' || !profile.username) {
+      return { kind: 'connect', request: { ...request, auth: { method: 'password', password: '' } } };
+    }
+  }
 
   if (hasStoredSecret) return { kind: 'connect', request };
 

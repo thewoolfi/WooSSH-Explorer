@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { RemoteSystemStats } from '../api/types';
 import { api } from '../api/client';
+import { getDiskKind } from '../lib/disks';
 
 /**
  * Cached `df`/`free`/`uptime` answers, shared by the status bar and the status panel.
@@ -62,10 +63,14 @@ export function summarise(stats: RemoteSystemStats | null): {
       ? Math.round((stats.memory.usedBytes / stats.memory.totalBytes) * 100)
       : null;
 
-  // The fullest filesystem is the one worth knowing about.
+  // The fullest server local filesystem is the one worth knowing about.
+  // External (NAS/NFS/CIFS) and pseudo filesystems are excluded from server disk accounting.
   let disk: string | null = null;
   let worst = -1;
-  for (const entry of stats.disks) {
+  const localDisks = stats.disks.filter((entry) => getDiskKind(entry) === 'local');
+  const candidateDisks = localDisks.length > 0 ? localDisks : stats.disks.filter((entry) => getDiskKind(entry) !== 'pseudo');
+
+  for (const entry of candidateDisks) {
     if (entry.sizeBytes <= 0) continue;
     const percent = (entry.usedBytes / entry.sizeBytes) * 100;
     if (percent > worst) {

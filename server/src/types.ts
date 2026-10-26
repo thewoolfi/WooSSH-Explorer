@@ -5,6 +5,8 @@
 
 export type AuthMethod = 'password' | 'privateKey' | 'agent';
 
+export type Protocol = 'sftp' | 'ftp';
+
 export type ConnectionStatus = 'connecting' | 'authenticated' | 'disconnected' | 'error';
 
 export type EntryKind = 'file' | 'directory' | 'symlink' | 'other';
@@ -34,6 +36,7 @@ export interface ConnectionSummary {
   port: number;
   username: string;
   authMethod: AuthMethod;
+  protocol?: Protocol;
   status: ConnectionStatus;
   statusDetail?: string;
   hostKeyFingerprint: string;
@@ -107,6 +110,7 @@ export interface SavedProfile {
   port: number;
   username: string;
   authMethod: AuthMethod;
+  protocol?: Protocol;
   privateKeyPath?: string;
   color: string;
   lastUsedAt: number | null;
@@ -171,6 +175,8 @@ export interface KnownHostEntry {
   line: number;
 }
 
+export type DiskKind = 'local' | 'external' | 'pseudo';
+
 /** One `df -Pk` row of `GET /api/connections/:id/system/stats` (contract §16). */
 export interface DiskUsage {
   filesystem: string;
@@ -178,6 +184,7 @@ export interface DiskUsage {
   usedBytes: number;
   availableBytes: number;
   mount: string;
+  kind?: DiskKind;
 }
 
 export interface MemoryUsage {

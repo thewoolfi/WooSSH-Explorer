@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import {
+  classifyDisk,
   emptySystemStats,
   parseDf,
   parseFree,
@@ -164,6 +165,33 @@ describe('parseFree', () => {
   });
 });
 
+describe('classifyDisk', () => {
+  it('identifies local disks', () => {
+    assert.equal(classifyDisk('/dev/sda1', '/'), 'local');
+    assert.equal(classifyDisk('/dev/nvme0n1p2', '/boot/efi'), 'local');
+    assert.equal(classifyDisk('/dev/mapper/root', '/'), 'local');
+    assert.equal(classifyDisk('/dev/disk1s1', '/'), 'local');
+  });
+
+  it('identifies external and network mounted disks', () => {
+    assert.equal(classifyDisk('192.168.1.50:/volume1/releaseapp-mebel', '/mnt/releaseapp-mebel'), 'external');
+    assert.equal(classifyDisk('/dev/sdb1', '/mnt/storage'), 'external');
+    assert.equal(classifyDisk('/dev/sdc1', '/media/usb'), 'external');
+    assert.equal(classifyDisk('//nas/share', '/shares/nas'), 'external');
+    assert.equal(classifyDisk('nfs_share', '/data/nfs'), 'external');
+    assert.equal(classifyDisk('fuse.sshfs', '/sshfs/remote'), 'external');
+  });
+
+  it('identifies pseudo and ephemeral filesystems', () => {
+    assert.equal(classifyDisk('tmpfs', '/run'), 'pseudo');
+    assert.equal(classifyDisk('tmpfs', '/dev/shm'), 'pseudo');
+    assert.equal(classifyDisk('efivarfs', '/sys/firmware/efi/efivars'), 'pseudo');
+    assert.equal(classifyDisk('ramfs', '/run/credentials/systemd-sysctl.service'), 'pseudo');
+    assert.equal(classifyDisk('devfs', '/dev'), 'pseudo');
+    assert.equal(classifyDisk('tmpfs', '/tmp'), 'pseudo');
+  });
+});
+
 describe('parseDf', () => {
   it('parses Linux rows and converts KiB to bytes', () => {
     const disks = parseDf(
@@ -178,8 +206,10 @@ describe('parseDf', () => {
       usedBytes: 42_949_672 * KIB,
       availableBytes: 60_130_776 * KIB,
       mount: '/',
+      kind: 'local',
     });
     assert.equal(disks[1]?.mount, '/dev/shm');
+    assert.equal(disks[1]?.kind, 'pseudo');
   });
 
   it('parses BSD rows and keeps a mount point that contains spaces', () => {

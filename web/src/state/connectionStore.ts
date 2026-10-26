@@ -208,6 +208,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     if (input.saveProfile) {
       await get()
         .saveProfile({
+          protocol: connection.protocol,
           label: connection.label,
           host: connection.host,
           port: connection.port,

@@ -35,6 +35,9 @@ export interface FileToolbarProps {
   onUpload: () => void;
   onUploadFolder: () => void;
   onOpenTerminal: () => void;
+  isFtp?: boolean;
+  inspectorOpen?: boolean;
+  onToggleInspector?: () => void;
 }
 
 export function FileToolbar({
@@ -56,6 +59,8 @@ export function FileToolbar({
   onUpload,
   onUploadFolder,
   onOpenTerminal,
+  inspectorOpen = false,
+  onToggleInspector,
 }: FileToolbarProps) {
   const [editingPath, setEditingPath] = useState(false);
   const { t } = useT();
@@ -169,6 +174,14 @@ export function FileToolbar({
           </button>
         </div>
 
+        {onToggleInspector ? (
+          <IconButton
+            icon="panel-right"
+            label={t(inspectorOpen ? 'topbar.hideInspector' : 'topbar.showInspector')}
+            active={inspectorOpen}
+            onClick={onToggleInspector}
+          />
+        ) : null}
         <IconButton
           icon="dots"
           label="More actions"

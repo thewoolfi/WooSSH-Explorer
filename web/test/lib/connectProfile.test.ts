@@ -59,6 +59,27 @@ describe('planProfileConnect', () => {
     const plan = planProfileConnect({ profile: { ...base, authMethod: 'agent' }, hasStoredSecret: false });
     expect(plan.kind).toBe('connect');
   });
+  test('an anonymous FTP profile connects directly with empty password', () => {
+    const plan = planProfileConnect({
+      profile: { ...base, protocol: 'ftp', port: 21, username: 'anonymous' },
+      hasStoredSecret: false,
+    });
+    expect(plan.kind).toBe('connect');
+    if (plan.kind !== 'connect') return;
+    expect(plan.request.protocol).toBe('ftp');
+    expect(plan.request.auth).toEqual({ method: 'password', password: '' });
+  });
+
+  test('an FTP profile with stored secret connects using the vault', () => {
+    const plan = planProfileConnect({
+      profile: { ...base, protocol: 'ftp', port: 21, username: 'user1' },
+      hasStoredSecret: true,
+    });
+    expect(plan.kind).toBe('connect');
+    if (plan.kind !== 'connect') return;
+    expect(plan.request.protocol).toBe('ftp');
+    expect(plan.request.useStoredSecret).toBe(true);
+  });
 });
 
 describe('secretIdFor', () => {

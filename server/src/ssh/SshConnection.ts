@@ -77,6 +77,7 @@ export class SshConnection extends EventEmitter {
   readonly port: number;
   readonly username: string;
   readonly authMethod: AuthMethod;
+  readonly protocol = 'sftp' as const;
   /** Set when this connection was created from a saved profile (§5 `:id` may be a profile id). */
   profileId: string | undefined;
 

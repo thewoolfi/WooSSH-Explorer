@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { HostKeyChallenge, SavedProfile } from '../api/types';
+import type { HostKeyChallenge, Protocol, SavedProfile } from '../api/types';
 
 export type Theme = 'dark' | 'light';
 export type ViewMode = 'list' | 'grid';
@@ -35,11 +35,13 @@ export interface Toast {
   detail?: string;
   /** Optional inline action, e.g. "Show in folder" after a desktop download. */
   action?: { label: string; run: () => void };
+  persistent?: boolean;
   createdAt: number;
 }
 
 export interface ConnectionDialogState {  open: boolean;
   profile: SavedProfile | null;
+  protocol?: Protocol;
   host?: string;
   username?: string;
   port?: number;
@@ -49,6 +51,8 @@ interface UiState {
   theme: Theme;
   sidebarOpen: boolean;
   inspectorOpen: boolean;
+  inspectorOpenByTab: Record<string, boolean>;
+  isInspectorOpen: (tabId?: string | null) => boolean;
   /** Width of the right-hand inspector, in pixels. */
   inspectorWidth: number;
   dockOpen: boolean;
@@ -80,8 +84,8 @@ interface UiState {
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
   toggleSidebar: () => void;
-  toggleInspector: () => void;
-  setInspector: (open: boolean) => void;
+  toggleInspector: (tabId?: string | null) => void;
+  setInspector: (open: boolean, tabId?: string | null) => void;
   /** Clamped to the allowed range and to 60% of the window. */
   setInspectorWidth: (width: number) => void;
   resetInspectorWidth: () => void;
@@ -169,6 +173,13 @@ export const useUiStore = create<UiState>((set, get) => ({
   theme: initialTheme(),
   sidebarOpen: prefs.sidebarOpen ?? true,
   inspectorOpen: prefs.inspectorOpen ?? true,
+  inspectorOpenByTab: {},
+  isInspectorOpen: (tabId) => {
+    if (tabId && get().inspectorOpenByTab[tabId] !== undefined) {
+      return get().inspectorOpenByTab[tabId]!;
+    }
+    return get().inspectorOpen;
+  },
   inspectorWidth:
     typeof prefs.inspectorWidth === 'number'
       ? clampInspectorWidth(prefs.inspectorWidth)
@@ -208,13 +219,29 @@ export const useUiStore = create<UiState>((set, get) => ({
     savePrefs(get());
   },
 
-  toggleInspector: () => {
-    set((s) => ({ inspectorOpen: !s.inspectorOpen }));
+  toggleInspector: (tabId) => {
+    const s = get();
+    if (tabId) {
+      const current = s.isInspectorOpen(tabId);
+      const next = !current;
+      set({
+        inspectorOpenByTab: { ...s.inspectorOpenByTab, [tabId]: next },
+      });
+    } else {
+      set((s) => ({ inspectorOpen: !s.inspectorOpen }));
+    }
     savePrefs(get());
   },
 
-  setInspector: (open) => {
-    set({ inspectorOpen: open });
+  setInspector: (open, tabId) => {
+    const s = get();
+    if (tabId) {
+      set({
+        inspectorOpenByTab: { ...s.inspectorOpenByTab, [tabId]: open },
+      });
+    } else {
+      set({ inspectorOpen: open });
+    }
     savePrefs(get());
   },
 
@@ -305,6 +332,7 @@ export const useUiStore = create<UiState>((set, get) => ({
       connectionDialog: {
         open: true,
         profile: init?.profile ?? null,
+        protocol: init?.protocol ?? init?.profile?.protocol,
         host: init?.host,
         username: init?.username,
         port: init?.port,
@@ -321,8 +349,10 @@ export const useUiStore = create<UiState>((set, get) => ({
     set((s) => ({
       toasts: [...s.toasts.slice(-4), { ...toast, id, createdAt: Date.now() }],
     }));
-    const ttl = toast.level === 'error' ? 9000 : 5000;
-    window.setTimeout(() => get().dismissToast(id), ttl);
+    if (!toast.persistent) {
+      const ttl = toast.level === 'error' ? 9000 : 5000;
+      window.setTimeout(() => get().dismissToast(id), ttl);
+    }
     return id;
   },
 

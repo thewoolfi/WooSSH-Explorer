@@ -686,6 +686,37 @@
   min-height: 0;
 }
 
+.dock__batch-banner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-5);
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+
+.dock__batch-info {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: var(--fs-sm);
+  color: var(--text-dim);
+}
+
+.dock__batch-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-weight: var(--fw-medium);
+  color: var(--text);
+}
+
+.dock__batch-percent {
+  font-size: var(--fs-sm);
+  color: var(--text-faint);
+}
+
 body.is-resizing {
   cursor: row-resize;
   user-select: none;

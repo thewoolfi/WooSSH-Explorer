@@ -30,12 +30,13 @@ export interface InspectorProps {
   /** Desktop only: open the file in the OS default application. */
   onEdit: ((entry: FileEntry) => void) | null;
   /** Measures this folder and its subfolders; `null` when there is no host. */
-  onMeasureUsage: (() => void) | null;
+  onMeasureUsage: ((paths?: string[]) => void) | null;
   /** Packs the given paths into a new archive on the remote host. */
   onArchive: (paths: string[]) => void;
   /** Unpacks an archive; the entry is the file that was selected. */
   onExtract: (entry: FileEntry) => void;
   measuring: boolean;
+  measuringPaths?: string[];
   usage: Record<string, { bytes: number; truncated: boolean }>;
 }
 
@@ -59,6 +60,7 @@ export function Inspector({
   onArchive,
   onExtract,
   measuring,
+  measuringPaths,
   usage,
 }: InspectorProps) {
   const selectedEntry =
@@ -126,6 +128,10 @@ export function Inspector({
           <MultiSummary
             entries={entries}
             selection={selection}
+            usage={usage}
+            onMeasureUsage={onMeasureUsage}
+            measuring={measuring}
+            measuringPaths={measuringPaths}
             onArchive={onArchive}
             onExtract={onExtract}
           />
@@ -142,6 +148,7 @@ export function Inspector({
             onArchive={onArchive}
             onExtract={onExtract}
             measuring={measuring}
+            measuringPaths={measuringPaths}
           />
         ) : search ? (
           <SearchSummary search={search} entries={entries} />
@@ -155,6 +162,7 @@ export function Inspector({
             onMeasureUsage={onMeasureUsage}
             onArchive={onArchive}
             measuring={measuring}
+            measuringPaths={measuringPaths}
           />
         )}
 
@@ -192,6 +200,7 @@ function Subject({
   onArchive,
   onExtract,
   measuring,
+  measuringPaths,
 }: {
   entry: FileEntry;
   onOpen: (entry: FileEntry) => void;
@@ -200,10 +209,11 @@ function Subject({
   onExec: (entry: FileEntry | null) => void;
   onEdit: ((entry: FileEntry) => void) | null;
   usage: Record<string, { bytes: number; truncated: boolean }>;
-  onMeasureUsage: (() => void) | null;
+  onMeasureUsage: ((paths?: string[]) => void) | null;
   onArchive: (paths: string[]) => void;
   onExtract: (entry: FileEntry) => void;
   measuring: boolean;
+  measuringPaths?: string[];
 }) {
   const { t } = useT();
   const editable = entry.kind === 'file';
@@ -256,12 +266,14 @@ function Subject({
                 type="button"
                 className="btn btn--secondary btn--md btn--block"
                 title={t('inspector.measureHint')}
-                disabled={measuring}
-                onClick={onMeasureUsage}
+                disabled={measuringPaths ? measuringPaths.includes(entry.path) : measuring}
+                onClick={() => onMeasureUsage([entry.path])}
               >
                 <Icon name="layers" size={14} />
                 <span className="btn__label">
-                  {measuring ? t('inspector.calculating') : t('inspector.measure')}
+                  {(measuringPaths ? measuringPaths.includes(entry.path) : measuring)
+                    ? t('inspector.calculating')
+                    : t('inspector.measureItem')}
                 </span>
               </button>
             ) : null}
@@ -350,11 +362,19 @@ function Subject({
 function MultiSummary({
   entries,
   selection,
+  usage,
+  onMeasureUsage,
+  measuring,
+  measuringPaths,
   onArchive,
   onExtract,
 }: {
   entries: FileEntry[];
   selection: string[];
+  usage: Record<string, { bytes: number; truncated: boolean }>;
+  onMeasureUsage: ((paths?: string[]) => void) | null;
+  measuring: boolean;
+  measuringPaths?: string[];
   onArchive: (paths: string[]) => void;
   onExtract: (entry: FileEntry) => void;
 }) {
@@ -363,9 +383,26 @@ function MultiSummary({
   const chosen = entries.filter((e) => set.has(e.path));
   const files = chosen.filter((e) => e.kind === 'file');
   const folders = chosen.filter((e) => e.kind === 'directory');
-  const bytes = files.reduce((sum, e) => sum + e.size, 0);
-  // Extracting is offered whenever the selection resolves to a single archive file, which
-  // happens here as well as in the one-item view.
+
+  const chosenPaths = chosen.map((e) => e.path);
+  const isMeasuringSelected = measuringPaths
+    ? chosenPaths.some((p) => measuringPaths.includes(p))
+    : measuring;
+
+  let totalBytes = files.reduce((sum, e) => sum + e.size, 0);
+  let hasMeasuredFolders = false;
+  let anyFolderTruncated = false;
+
+  for (const f of folders) {
+    const u = usage[f.path];
+    if (u) {
+      totalBytes += u.bytes;
+      hasMeasuredFolders = true;
+      if (u.truncated) anyFolderTruncated = true;
+    }
+  }
+
+  const allFoldersMeasured = folders.length === 0 || folders.every((f) => usage[f.path] !== undefined);
   const only = chosen.length === 1 ? chosen[0] : undefined;
   const canExtract = only !== undefined && only.kind === 'file' && isArchiveName(only.name);
 
@@ -377,14 +414,44 @@ function MultiSummary({
       </span>
       <h3 className="inspector__name">{tc('inspector.selectedCount', selection.length)}</h3>
       <p className="inspector__kind">
-        {formatCount(folders.length, 'folder')} В· {formatCount(files.length, 'file')}
+        {formatCount(folders.length, 'folder')} · {formatCount(files.length, 'file')}
       </p>
       <dl className="meta">
-        {files.length > 0 ? <Meta label={t('inspector.totalSize')} value={formatBytes(bytes)} sub={t('inspector.filesOnly')} /> : null}
+        <Meta
+          label={t('inspector.totalSize')}
+          value={
+            isMeasuringSelected
+              ? t('inspector.calculating')
+              : `${anyFolderTruncated ? '≥ ' : ''}${formatBytes(totalBytes)}`
+          }
+          sub={
+            folders.length > 0 && !allFoldersMeasured
+              ? t('inspector.filesOnly')
+              : anyFolderTruncated
+                ? t('inspector.atLeastShort')
+                : undefined
+          }
+        />
         <Meta label={t('inspector.items')} value={String(selection.length)} />
       </dl>
 
       <div className="inspector__actions">
+        {onMeasureUsage ? (
+          <button
+            type="button"
+            className="btn btn--secondary btn--md btn--block"
+            title={t('inspector.measureSelectedHint')}
+            disabled={isMeasuringSelected}
+            onClick={() => onMeasureUsage(chosenPaths)}
+          >
+            <Icon name="layers" size={14} />
+            <span className="btn__label">
+              {isMeasuringSelected
+                ? t('inspector.calculating')
+                : t('inspector.measureSelected')}
+            </span>
+          </button>
+        ) : null}
         <button
           type="button"
           className="btn btn--secondary btn--md btn--block"
@@ -417,15 +484,17 @@ function FolderSummary({
   onMeasureUsage,
   onArchive,
   measuring,
+  measuringPaths,
 }: {
   listing: DirectoryListing | null;
   entries: FileEntry[];
   connectionLabel?: string;
   onExec: (entry: FileEntry | null) => void;
   usage: Record<string, { bytes: number; truncated: boolean }>;
-  onMeasureUsage: (() => void) | null;
+  onMeasureUsage: ((paths?: string[]) => void) | null;
   onArchive: (paths: string[]) => void;
   measuring: boolean;
+  measuringPaths?: string[];
 }) {
   const { t } = useT();
   if (!listing) {
@@ -480,12 +549,14 @@ function FolderSummary({
             type="button"
             className="btn btn--secondary btn--md btn--block"
             title={t('inspector.measureHint')}
-            disabled={measuring}
-            onClick={onMeasureUsage}
+            disabled={measuringPaths ? measuringPaths.includes(listing.path) : measuring}
+            onClick={() => onMeasureUsage([listing.path])}
           >
             <Icon name="layers" size={14} />
             <span className="btn__label">
-              {measuring ? t('inspector.calculating') : t('inspector.measure')}
+              {(measuringPaths ? measuringPaths.includes(listing.path) : measuring)
+                ? t('inspector.calculating')
+                : t('inspector.measure')}
             </span>
           </button>
         ) : null}

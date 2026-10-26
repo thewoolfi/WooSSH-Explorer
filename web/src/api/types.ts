@@ -4,6 +4,7 @@
  */
 
 export type AuthMethod = 'password' | 'privateKey' | 'agent';
+export type Protocol = 'sftp' | 'ftp';
 export type HostColor = 'mint' | 'amber' | 'violet' | 'sky' | 'rose' | 'slate';
 
 export interface ApiErrorBody {
@@ -35,6 +36,7 @@ export interface ConnectionSummary {
   port: number;
   username: string;
   authMethod: AuthMethod;
+  protocol?: Protocol;
   status: ConnectionStatus;
   statusDetail?: string;
   hostKeyFingerprint: string;
@@ -137,6 +139,8 @@ export interface KnownHostEntry {
   line: number;
 }
 
+export type DiskKind = 'local' | 'external' | 'pseudo';
+
 export interface RemoteSystemStats {  collectedAt: number;
   uptimeSeconds: number | null;
   load: number[] | null;
@@ -149,6 +153,7 @@ export interface RemoteSystemStats {  collectedAt: number;
     usedBytes: number;
     availableBytes: number;
     mount: string;
+    kind?: DiskKind;
   }[];
   hostname: string | null;
   kernel: string | null;
@@ -224,6 +229,7 @@ export interface SavedProfile {
   port: number;
   username: string;
   authMethod: AuthMethod;
+  protocol?: Protocol;
   privateKeyPath?: string;
   color: string;
   lastUsedAt: number | null;
@@ -279,6 +285,7 @@ export type AuthPayload =
 
 export interface ConnectRequest {
   profileId?: string;
+  protocol?: Protocol;
   label?: string;
   color?: string;
   host: string;

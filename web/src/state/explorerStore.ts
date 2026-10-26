@@ -224,6 +224,14 @@ export const useExplorerStore = create<ExplorerState>((set, get) => ({
   },
 
   openTerminalTab: (connectionId, label, cwd) => {
+    const conn = useConnectionStore.getState().connections.find((c) => c.id === connectionId);
+    if (conn?.protocol === 'ftp') {
+      useUiStore.getState().pushToast({
+        level: 'warn',
+        title: translate('files.terminalNotSupportedFtp'),
+      });
+      return '';
+    }
     const existing = get().tabs.filter(
       (tab) => tab.kind === 'terminal' && tab.connectionId === connectionId,
     ).length;

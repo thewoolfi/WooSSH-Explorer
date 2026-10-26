@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { badRequest, conflict, notFound } from '../errors.js';
 import type { Logger } from '../logger.js';
-import type { AuthMethod, SavedProfile } from '../types.js';
+import type { AuthMethod, Protocol, SavedProfile } from '../types.js';
 
 /**
  * Saved profiles (§4). The file only ever contains `SavedProfile` fields — a password or
@@ -27,6 +27,7 @@ export interface ProfileInput {
   port: number;
   username: string;
   authMethod: AuthMethod;
+  protocol?: Protocol;
   privateKeyPath?: string;
   color?: string;
 }
@@ -67,6 +68,14 @@ function normalizeProfile(value: unknown): SavedProfile | null {
   if (id === undefined || label === undefined || host === undefined || username === undefined) return null;
   if (port === undefined || authMethod === undefined) return null;
 
+  const rawProto = value['protocol'];
+  const protocol: Protocol | undefined =
+    rawProto === 'ftp' || rawProto === 'sftp'
+      ? rawProto
+      : port === 21
+        ? 'ftp'
+        : undefined;
+
   const profile: SavedProfile = {
     id,
     label,
@@ -74,6 +83,7 @@ function normalizeProfile(value: unknown): SavedProfile | null {
     port,
     username,
     authMethod,
+    ...(protocol !== undefined ? { protocol } : {}),
     color: asString(value['color']) ?? 'slate',
     lastUsedAt: typeof value['lastUsedAt'] === 'number' && Number.isFinite(value['lastUsedAt']) ? value['lastUsedAt'] : null,
   };
@@ -160,6 +170,10 @@ export class ProfileStore {
       color: input.color ?? 'slate',
       lastUsedAt: null,
     };
+    const protocol = input.protocol ?? (input.port === 21 ? 'ftp' : undefined);
+    if (protocol !== undefined) {
+      profile.protocol = protocol;
+    }
     if (input.authMethod === 'privateKey' && input.privateKeyPath !== undefined) {
       profile.privateKeyPath = input.privateKeyPath;
     }
@@ -182,6 +196,7 @@ export class ProfileStore {
       ...(patch.port !== undefined ? { port: patch.port } : {}),
       ...(patch.username !== undefined ? { username: patch.username } : {}),
       ...(patch.authMethod !== undefined ? { authMethod: patch.authMethod } : {}),
+      ...(patch.protocol !== undefined ? { protocol: patch.protocol } : {}),
       ...(patch.color !== undefined ? { color: patch.color } : {}),
       ...(patch.privateKeyPath !== undefined ? { privateKeyPath: patch.privateKeyPath } : {}),
     };
@@ -301,6 +316,11 @@ export function parseProfileInput(body: unknown): ProfileInput {
   }
 
   const input: ProfileInput = { label, host, port, username, authMethod };
+  if (body['protocol'] === 'ftp' || body['protocol'] === 'sftp') {
+    input.protocol = body['protocol'];
+  } else if (port === 21) {
+    input.protocol = 'ftp';
+  }
   const privateKeyPath = asString(body['privateKeyPath']);
   if (privateKeyPath !== undefined) input.privateKeyPath = privateKeyPath;
   const color = asString(body['color']);
