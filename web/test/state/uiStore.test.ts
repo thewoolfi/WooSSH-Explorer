@@ -169,6 +169,18 @@ describe('uiStore preferences', () => {
     expect(store().isInspectorOpen('tab-right')).toBe(false);
   });
 
+  test('copyOnSelect defaults to true for PuTTY behavior and persists toggles', () => {
+    expect(store().copyOnSelect).toBe(true);
+
+    store().setCopyOnSelect(false);
+    expect(store().copyOnSelect).toBe(false);
+    expect(prefs().copyOnSelect).toBe(false);
+
+    store().setCopyOnSelect(true);
+    expect(store().copyOnSelect).toBe(true);
+    expect(prefs().copyOnSelect).toBe(true);
+  });
+
   test('showHidden is persisted so the choice survives a reload', () => {
     store().setShowHidden(true);
 

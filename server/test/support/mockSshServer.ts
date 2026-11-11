@@ -1397,11 +1397,20 @@ export async function startMockSshServer(options: MockSshServerOptions = {}): Pr
   function handleSession(session: any): void {
     let ptyInfo: { term?: string; rows?: number; cols?: number } = {};
 
-    session.on('pty', (accept: any) => {
+    session.on('pty', (accept: any, _reject: any, info: any) => {
+      ptyInfo = {
+        term: info?.term,
+        rows: typeof info?.rows === 'number' ? info.rows : ptyInfo.rows,
+        cols: typeof info?.cols === 'number' ? info.cols : ptyInfo.cols,
+      };
       if (typeof accept === 'function') accept();
     });
     session.on('window-change', (accept: any, _reject: any, info: any) => {
-      ptyInfo = { ...ptyInfo, rows: info?.rows, cols: info?.cols };
+      ptyInfo = {
+        ...ptyInfo,
+        rows: typeof info?.rows === 'number' ? info.rows : ptyInfo.rows,
+        cols: typeof info?.cols === 'number' ? info.cols : ptyInfo.cols,
+      };
       if (typeof accept === 'function') accept();
     });
     session.on('signal', (accept: any) => {
@@ -1433,9 +1442,9 @@ export async function startMockSshServer(options: MockSshServerOptions = {}): Pr
       openShells += 1;
       let pending = '';
       let finished = false;
-      let cols = ptyInfo.cols ?? 80;
-      let rows = ptyInfo.rows ?? 24;
-      const prompt = `${username}@${HOSTNAME}:${cols}x${rows}$ `;
+      const currentCols = (): number => ptyInfo.cols ?? 80;
+      const currentRows = (): number => ptyInfo.rows ?? 24;
+      const currentPrompt = (): string => `${username}@${HOSTNAME}:${currentCols()}x${currentRows()}$ `;
 
       const finish = (): void => {
         if (finished) return;
@@ -1457,13 +1466,28 @@ export async function startMockSshServer(options: MockSshServerOptions = {}): Pr
         finish();
       });
 
-      stream.write(`${prompt}`);
+      stream.write(`${currentPrompt()}`);
       debug('shell opened');
 
       const handleLine = (line: string): void => {
         const trimmed = line.trim();
         if (trimmed === '') {
-          stream.write(prompt);
+          stream.write(currentPrompt());
+          return;
+        }
+        if (trimmed === 'stty size') {
+          stream.write(`${currentRows()} ${currentCols()}\r\n`);
+          stream.write(currentPrompt());
+          return;
+        }
+        if (trimmed === 'tput cols') {
+          stream.write(`${currentCols()}\r\n`);
+          stream.write(currentPrompt());
+          return;
+        }
+        if (trimmed === 'tput lines') {
+          stream.write(`${currentRows()}\r\n`);
+          stream.write(currentPrompt());
           return;
         }
         if (trimmed === 'exit' || trimmed.startsWith('exit ')) {
@@ -1477,7 +1501,7 @@ export async function startMockSshServer(options: MockSshServerOptions = {}): Pr
         const result = runCommand(cmdCtx, trimmed);
         const text = (result.stdout + result.stderr).replace(/\r?\n/g, '\r\n');
         stream.write(text);
-        stream.write(prompt);
+        stream.write(currentPrompt());
       };
 
       stream.on('data', (chunk: Buffer) => {
@@ -1496,7 +1520,7 @@ export async function startMockSshServer(options: MockSshServerOptions = {}): Pr
         if (pending.includes('\u0003')) {
           pending = '';
           stream.write('^C\r\n');
-          stream.write(prompt);
+          stream.write(currentPrompt());
         }
       });
     });

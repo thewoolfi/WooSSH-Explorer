@@ -130,4 +130,33 @@ describe('terminal', () => {
       await socket.close();
     }
   });
+
+  test('honours initial query dimensions, early resize before ready, and window-change updates', async () => {
+    // Open with non-default dimensions and immediately fire an early resize before `ready`.
+    const socket = await WsClient.open(terminalUrl(connectionId, 132, 42));
+    try {
+      socket.send({ t: 'resize', cols: 164, rows: 52 });
+      await socket.waitForFrame((f) => f.t === 'ready', { timeoutMs: 8_000, label: 'ready frame' });
+
+      socket.send({ t: 'input', data: 'stty size\n' });
+      await waitFor(() => outputText(socket).includes('52 164'), {
+        timeoutMs: 8_000,
+        label: `early resize to apply (got ${JSON.stringify(outputText(socket))})`,
+      });
+
+      // Subsequent resize updates both axes and preserves them on single-axis updates.
+      socket.send({ t: 'resize', cols: 190, rows: 58 });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      socket.send({ t: 'resize', cols: 210 });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      socket.send({ t: 'input', data: 'stty size\n' });
+      await waitFor(() => outputText(socket).includes('58 210'), {
+        timeoutMs: 8_000,
+        label: `post-ready resize and preserved row count (got ${JSON.stringify(outputText(socket))})`,
+      });
+    } finally {
+      await socket.close();
+    }
+  });
 });

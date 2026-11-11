@@ -2,6 +2,22 @@
 
 All notable changes to WooSSH will be documented in this file.
 
+## [1.3.1] - 2026-11-11
+
+### Added
+- **PuTTY-Style Terminal Copy & Paste:**
+  - **Mouse selection & paste:** copy-on-select with left mouse drag is now enabled by default (toggleable via the terminal toolbar clipboard button), while right-click and middle-click paste directly from the clipboard without opening a context menu or Windows autoscroll. Holding `Shift` passes mouse clicks through to TUI applications (`htop`, `vim`, `mc`).
+  - **Keyboard shortcuts:** `Shift+Insert` pastes, `Ctrl+Insert` and `Ctrl+Shift+C` copy without clearing selection, `Ctrl+C` copies & clears when text is selected (otherwise sends `SIGINT`), and `Ctrl+V` / `Ctrl+Shift+V` paste using physical key codes independent of keyboard layout, leaving bare `Insert` unchanged.
+  - **Native Electron Clipboard Bridge:** added `desktop:clipboard-read` / `desktop:clipboard-write` IPC handlers and clipboard permission scoping in the desktop shell so terminal copy/paste never triggers Web Clipboard permission prompts or duplicate paste events.
+
+### Fixed
+- **Terminal & Remote PTY Resize Synchronization on Maximize:**
+  - Fixed terminal sessions opening and remaining stuck at `80×24` (e.g. `htop` boxed in the upper-left corner) when launched in a small window and maximized: `TerminalPane` now fits before creating the WebSocket connection, and `WsHub` buffers early `resize`/`input`/`close` frames arriving while `connection.shell()` is negotiating.
+  - Synchronized remote PTY dimensions (`window-change` / `SIGWINCH`) across window maximize/unmaximize settle animations, terminal font size changes, inspector panel toggles/resizes, webfont loading, and switching back from hidden tabs.
+  - Moved `.tpane__host` padding onto `.tpane__host .xterm` so `FitAddon.proposeDimensions()` accounts for padding accurately without clipping bottom rows or rightmost columns.
+
+---
+
 ## [1.3.0] - 2026-10-26
 
 ### Added

@@ -1,4 +1,4 @@
-﻿import { useEffect, lazy, Suspense, useRef, useState } from 'react';
+import { useEffect, lazy, Suspense, useRef, useState } from 'react';
 import { useConnectionStore } from '../../state/connectionStore';
 import { useExplorerStore } from '../../state/explorerStore';
 import { useTransferStore } from '../../state/transferStore';
@@ -393,7 +393,13 @@ export function AppShell() {
                         </div>
                       }
                     >
-                      <TerminalPane connectionId={tab.connectionId} title={tab.title} cwd={tab.cwd} tabId={tab.id} />
+                      <TerminalPane
+                        connectionId={tab.connectionId}
+                        title={tab.title}
+                        cwd={tab.cwd}
+                        tabId={tab.id}
+                        visible={visible}
+                      />
                     </Suspense>
                   ) : null}
                   {tab.kind === 'transfers' ? <TransferView /> : null}

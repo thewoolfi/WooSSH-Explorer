@@ -426,6 +426,8 @@ const en = {
   'term.searchPlaceholder': 'Find in scrollback',
   'term.fontSize': 'Font size',
   'term.copyOnSelect': 'Copy on select',
+  'term.copyOnSelectHint':
+    'Copy on select (PuTTY): left-drag copies, right/middle-click or Shift+Insert pastes, Ctrl+Insert copies',
   'term.inspectorTitle': 'Commands & Maintenance',
   'term.pkgManager': 'Package manager',
   'term.run': 'Run',
@@ -1076,6 +1078,8 @@ const ru: Dictionary = {
   'term.searchPlaceholder': 'Искать в выводе',
   'term.fontSize': 'Размер шрифта',
   'term.copyOnSelect': 'Копировать при выделении',
+  'term.copyOnSelectHint':
+    'Копирование при выделении (PuTTY): ЛКМ — копировать, ПКМ / СКМ / Shift+Insert — вставить, Ctrl+Insert — копировать',
   'term.inspectorTitle': 'Команды и обслуживание',
   'term.pkgManager': 'Пакетный менеджер',
   'term.run': 'Выполнить',

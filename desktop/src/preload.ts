@@ -62,6 +62,9 @@ export interface DesktopBridge {
   onUpdateEvent(handler: (event: UpdateEvent) => void): () => void;
   /** Opens http(s) links in the user's browser. */
   openExternal(url: string): Promise<void>;
+  /** Native OS clipboard helpers so PuTTY copy/paste avoids Web Clipboard permission prompts. */
+  readClipboard(): Promise<string>;
+  writeClipboard(text: string): Promise<void>;
   info(): Promise<{
     version: string;
     electron: string;
@@ -122,6 +125,8 @@ const bridge: DesktopBridge = {
   reveal: (path) => ipcRenderer.invoke('desktop:reveal', path) as Promise<void>,
   openPath: (path) => ipcRenderer.invoke('desktop:open-path', path) as Promise<void>,
   openExternal: (url) => ipcRenderer.invoke('desktop:open-external', url) as Promise<void>,
+  readClipboard: () => ipcRenderer.invoke('desktop:clipboard-read') as Promise<string>,
+  writeClipboard: (text) => ipcRenderer.invoke('desktop:clipboard-write', text) as Promise<void>,
 
   updateCheck: () =>
     ipcRenderer.invoke('desktop:update-check') as Promise<{

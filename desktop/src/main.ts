@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { cpSync, existsSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, session, shell } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { createServer, type RunningServer } from '@ssh-explorer/server-runtime';
 import { buildMenu, sendToFocused, type MenuAction } from './menu';
@@ -193,7 +193,39 @@ async function chooseSavePath(defaultPath: string): Promise<string | null> {
 /*  IPC                                                                         */
 /* --------------------------------------------------------------------------- */
 
+function installClipboardPermissions(serverUrl: string): void {
+  const allowedOrigin = new URL(serverUrl).origin;
+  const isAllowedOrigin = (url: string | undefined): boolean => {
+    if (!url) return false;
+    try {
+      return new URL(url).origin === allowedOrigin;
+    } catch {
+      return false;
+    }
+  };
+
+  session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin) => {
+    if (permission === 'clipboard-read' || permission === 'clipboard-sanitized-write') {
+      return isAllowedOrigin(requestingOrigin || webContents?.getURL());
+    }
+    return true;
+  });
+
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
+    if (permission === 'clipboard-read' || permission === 'clipboard-sanitized-write') {
+      callback(isAllowedOrigin(details.requestingUrl || webContents.getURL()));
+      return;
+    }
+    callback(false);
+  });
+}
+
 function installIpc(resolved: DesktopPaths): void {
+  ipcMain.handle('desktop:clipboard-read', () => clipboard.readText());
+  ipcMain.handle('desktop:clipboard-write', (_event, text: unknown) => {
+    if (typeof text === 'string') clipboard.writeText(text);
+  });
+
   ipcMain.handle('desktop:reveal', (_event, target: unknown) => {
     if (typeof target === 'string' && target !== '') shell.showItemInFolder(target);
   });
@@ -773,6 +805,7 @@ async function main(): Promise<void> {
     mainWindow?.setMenuBarVisibility(false);
   }
 
+  installClipboardPermissions(server.url);
   installDownloadHandler(paths.downloadDir);
   installIpc(paths);
   installAutoUpdate();

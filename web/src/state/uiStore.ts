@@ -189,7 +189,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   dockHeight: prefs.dockHeight ?? 200,
   showHidden: prefs.showHidden ?? false,
   terminalFontSize: prefs.terminalFontSize ?? 12.5,
-  copyOnSelect: prefs.copyOnSelect ?? false,
+  copyOnSelect: prefs.copyOnSelect ?? true,
   commandPaletteOpen: false,
   knownHostsOpen: false,
   serverStatsOpen: false,

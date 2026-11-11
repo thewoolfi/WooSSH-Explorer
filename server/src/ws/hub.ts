@@ -165,8 +165,8 @@ export class WsHub {
     const logger = this.options.logger.child({ terminal: shortId() });
     const query = parseQuery(req.url ?? '');
     const connectionId = query.get('connectionId') ?? query.get('connection') ?? '';
-    const cols = clampDimension(query.get('cols'), 80, 1, 1000);
-    const rows = clampDimension(query.get('rows'), 24, 1, 1000);
+    let cols = clampDimension(query.get('cols'), 80, 1, 1000);
+    let rows = clampDimension(query.get('rows'), 24, 1, 1000);
 
     const fail = (code: string, message: string): void => {
       this.send(socket, { t: 'error', code, message } satisfies TerminalFrame);
@@ -194,20 +194,22 @@ export class WsHub {
       return;
     }
 
-    const window: PseudoTtyOptions = { term: TERM, cols, rows };
-    let channel: ClientChannel;
-    try {
-      channel = await connection.shell(window);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Could not open a shell.';
-      const code = (err as { code?: string }).code;
-      fail(typeof code === 'string' ? code : 'REMOTE_ERROR', message);
-      return;
-    }
-
     const sessionId = newId('term');
-    this.sessions.set(sessionId, { ws: socket, channel });
+    let channel: ClientChannel | null = null;
+    let ptyCols = cols;
+    let ptyRows = rows;
     let closed = false;
+    const pendingInputs: string[] = [];
+    const pendingSignals: string[] = [];
+
+    const closeChannel = (): void => {
+      if (channel === null) return;
+      try {
+        channel.close();
+      } catch {
+        /* already gone */
+      }
+    };
 
     const cleanup = (frame: TerminalFrame): void => {
       if (closed) return;
@@ -215,11 +217,7 @@ export class WsHub {
       this.sessions.delete(sessionId);
       // Contract §9: the terminal always ends with an `exit` frame, then the socket closes.
       this.send(socket, frame);
-      try {
-        channel.close();
-      } catch {
-        /* already gone */
-      }
+      closeChannel();
       try {
         socket.close();
       } catch {
@@ -227,6 +225,99 @@ export class WsHub {
       }
       logger.debug('terminal session ended', { sessionId });
     };
+
+    const applyResize = (nextColsRaw: unknown, nextRowsRaw: unknown): void => {
+      const nextCols = clampPositiveInt(nextColsRaw, 1, 1000);
+      const nextRows = clampPositiveInt(nextRowsRaw, 1, 1000);
+      if (nextCols === undefined && nextRows === undefined) return;
+      cols = nextCols ?? cols;
+      rows = nextRows ?? rows;
+
+      if (channel === null) {
+        return;
+      }
+      if (ptyCols === cols && ptyRows === rows) return;
+      ptyCols = cols;
+      ptyRows = rows;
+      try {
+        // ssh2's setWindow signature is (rows, cols, height, width).
+        channel.setWindow(ptyRows, ptyCols, 0, 0);
+      } catch (err) {
+        logger.debug('could not resize the terminal', { error: err });
+      }
+    };
+
+    const forwardSignal = (targetChannel: ClientChannel, signal: string): void => {
+      try {
+        targetChannel.signal(signal);
+      } catch (err) {
+        logger.debug('could not deliver the signal', { error: err });
+        // SIGINT in particular is often only honoured as a control character.
+        if (signal === 'INT') targetChannel.write('\x03');
+      }
+    };
+
+    // Attach socket listeners before awaiting `connection.shell()` so early resize,
+    // input, and close events sent right after WebSocket open are never lost.
+    socket.on('message', (data: Buffer | ArrayBuffer | Buffer[]) => {
+      const parsed = safeJson(data);
+      if (parsed === null || typeof parsed !== 'object') return;
+      const frame = parsed as { t?: unknown; data?: unknown; cols?: unknown; rows?: unknown; signal?: unknown };
+
+      if (frame.t === 'input') {
+        if (typeof frame.data !== 'string') return;
+        if (channel === null) {
+          if (pendingInputs.length < 256) pendingInputs.push(frame.data);
+          return;
+        }
+        channel.write(frame.data);
+        return;
+      }
+      if (frame.t === 'resize') {
+        applyResize(frame.cols, frame.rows);
+        return;
+      }
+      if (frame.t === 'signal') {
+        if (typeof frame.signal !== 'string') return;
+        if (channel === null) {
+          if (pendingSignals.length < 32) pendingSignals.push(frame.signal);
+          return;
+        }
+        forwardSignal(channel, frame.signal);
+      }
+    });
+
+    socket.on('close', () => {
+      if (!closed) {
+        closed = true;
+        this.sessions.delete(sessionId);
+        closeChannel();
+        logger.debug('terminal socket closed by the client', { sessionId });
+      }
+    });
+
+    socket.on('error', (err: Error) => {
+      logger.debug('terminal socket error', { error: err });
+    });
+
+    const window: PseudoTtyOptions = { term: TERM, cols, rows };
+    try {
+      channel = await connection.shell(window);
+    } catch (err) {
+      if (closed || socket.readyState !== socket.OPEN) return;
+      closed = true;
+      const message = err instanceof Error ? err.message : 'Could not open a shell.';
+      const code = (err as { code?: string }).code;
+      fail(typeof code === 'string' ? code : 'REMOTE_ERROR', message);
+      return;
+    }
+
+    if (closed || socket.readyState !== socket.OPEN) {
+      closeChannel();
+      return;
+    }
+
+    this.sessions.set(sessionId, { ws: socket, channel });
 
     channel.on('data', (chunk: Buffer) => {
       if (socket.readyState !== socket.OPEN) return;
@@ -252,58 +343,26 @@ export class WsHub {
       cleanup({ t: 'exit', code: null, signal: null, reason: 'error' });
     });
 
-    socket.on('message', (data: Buffer | ArrayBuffer | Buffer[]) => {
-      const parsed = safeJson(data);
-      if (parsed === null || typeof parsed !== 'object') return;
-      const frame = parsed as { t?: unknown; data?: unknown; cols?: unknown; rows?: unknown; signal?: unknown };
-
-      if (frame.t === 'input') {
-        if (typeof frame.data !== 'string') return;
-        channel.write(frame.data);
-        return;
+    if (cols !== ptyCols || rows !== ptyRows) {
+      ptyCols = cols;
+      ptyRows = rows;
+      try {
+        channel.setWindow(ptyRows, ptyCols, 0, 0);
+      } catch (err) {
+        logger.debug('could not apply initial resize', { error: err });
       }
-      if (frame.t === 'resize') {
-        const nextCols = typeof frame.cols === 'number' ? frame.cols : undefined;
-        const nextRows = typeof frame.rows === 'number' ? frame.rows : undefined;
-        if (nextCols === undefined && nextRows === undefined) return;
-        try {
-          // ssh2's setWindow signature is (rows, cols, height, width).
-          channel.setWindow(nextRows ?? rows, nextCols ?? cols, 0, 0);
-        } catch (err) {
-          logger.debug('could not resize the terminal', { error: err });
-        }
-        return;
-      }
-      if (frame.t === 'signal') {
-        if (typeof frame.signal !== 'string') return;
-        try {
-          channel.signal(frame.signal);
-        } catch (err) {
-          logger.debug('could not deliver the signal', { error: err });
-          // SIGINT in particular is often only honoured as a control character.
-          if (frame.signal === 'INT') channel.write('\x03');
-        }
-      }
-    });
-
-    socket.on('close', () => {
-      if (!closed) {
-        closed = true;
-        this.sessions.delete(sessionId);
-        try {
-          channel.close();
-        } catch {
-          /* ignore */
-        }
-        logger.debug('terminal socket closed by the client', { sessionId });
-      }
-    });
-
-    socket.on('error', (err: Error) => {
-      logger.debug('terminal socket error', { error: err });
-    });
+    }
 
     this.send(socket, { t: 'ready', sessionId, term: TERM } satisfies TerminalFrame);
+
+    while (pendingInputs.length > 0) {
+      const chunk = pendingInputs.shift()!;
+      channel.write(chunk);
+    }
+    while (pendingSignals.length > 0) {
+      const signal = pendingSignals.shift()!;
+      forwardSignal(channel, signal);
+    }
   }
 
   // --------------------------------------------------------------------- close
@@ -374,4 +433,11 @@ function clampDimension(raw: string | null, fallback: number, min: number, max: 
   const value = Number.parseInt(raw, 10);
   if (!Number.isFinite(value)) return fallback;
   return Math.min(Math.max(value, min), max);
+}
+
+function clampPositiveInt(raw: unknown, min: number, max: number): number | undefined {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
+  const rounded = Math.round(raw);
+  if (rounded < 1) return undefined;
+  return Math.min(Math.max(rounded, min), max);
 }

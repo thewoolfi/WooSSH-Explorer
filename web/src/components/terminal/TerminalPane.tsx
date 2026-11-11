@@ -6,6 +6,16 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 import { terminalSocketUrl } from '../../api/client';
 import type { TerminalServerFrame } from '../../api/types';
+import { readClipboardText, writeClipboardText } from '../../lib/desktop';
+import {
+  classifyTerminalKeyAction,
+  shouldHandleTerminalMousePaste,
+} from '../../lib/terminalClipboard';
+import {
+  resolveTerminalSize,
+  shouldSendTerminalResize,
+  type TerminalSize,
+} from '../../lib/terminalResize';
 import { useUiStore } from '../../state/uiStore';
 import { useT } from '../../i18n/useT';
 import { Icon } from '../ui/Icon';
@@ -44,22 +54,27 @@ export function TerminalPane({
   title,
   cwd,
   tabId,
+  visible = true,
 }: {
   connectionId: string;
   title: string;
   /** Directory to move the shell into once it has started. */
   cwd?: string;
   tabId?: string;
+  /** Whether the tab panel is currently visible in the layout. */
+  visible?: boolean;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  const syncSizeRef = useRef<((forceSend?: boolean) => void) | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const theme = useUiStore((s) => s.theme);
   const terminalFontSize = useUiStore((s) => s.terminalFontSize);
   const setTerminalFontSize = useUiStore((s) => s.setTerminalFontSize);
   const copyOnSelect = useUiStore((s) => s.copyOnSelect);
+  const setCopyOnSelect = useUiStore((s) => s.setCopyOnSelect);
   const inspectorOpen = useUiStore((s) => s.isInspectorOpen(tabId));
   const setInspector = useUiStore((s) => s.setInspector);
   const toggleInspector = useUiStore((s) => s.toggleInspector);
@@ -137,25 +152,75 @@ export function TerminalPane({
     fitRef.current = fit;
     searchRef.current = search;
 
-    const sendResize = () => {
-      if (disposed || !term.element) return;
+    const fitTerminal = (): TerminalSize | null => {
+      if (disposed || !term.element) return null;
+      if (host.clientWidth <= 0 || host.clientHeight <= 0) return null;
       try {
         fit.fit();
       } catch {
         /* the pane can be zero-sized while a tab is hidden */
-        return;
+        return null;
       }
-      const socket = socketRef.current;
-      if (socket?.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ t: 'resize', cols: term.cols, rows: term.rows }));
-      }
+      return resolveTerminalSize(term.cols, term.rows);
     };
 
-    const observer = new ResizeObserver(() => sendResize());
-    observer.observe(host);
-    const raf = requestAnimationFrame(sendResize);
+    // Fit before constructing the WebSocket URL so the SSH PTY opens at the
+    // real pane dimensions instead of hardcoding 80x24.
+    fitTerminal();
+    const initialSize = resolveTerminalSize(term.cols, term.rows);
+    let lastSentSize: TerminalSize | null = initialSize;
 
-    const socket = new WebSocket(terminalSocketUrl(connectionId, term.cols || 80, term.rows || 24));
+    const sendCurrentSize = (force = false) => {
+      if (disposed) return;
+      const socket = socketRef.current;
+      if (!socket || socket.readyState !== WebSocket.OPEN) return;
+      const next = resolveTerminalSize(term.cols, term.rows);
+      if (!shouldSendTerminalResize(next, lastSentSize, force)) return;
+      lastSentSize = next;
+      socket.send(JSON.stringify({ t: 'resize', cols: next.cols, rows: next.rows }));
+    };
+
+    const syncSize = (forceSend = false) => {
+      const fitted = fitTerminal();
+      if (!fitted) return;
+      sendCurrentSize(forceSend);
+    };
+    syncSizeRef.current = syncSize;
+
+    let settleTimer: number | null = null;
+    const scheduleSettleSync = () => {
+      if (disposed) return;
+      if (settleTimer !== null) window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(() => {
+        settleTimer = null;
+        syncSize();
+      }, 120);
+    };
+
+    const resizeDisposable = term.onResize(() => {
+      sendCurrentSize();
+    });
+
+    const observer = new ResizeObserver(() => {
+      syncSize();
+      scheduleSettleSync();
+    });
+    observer.observe(host);
+
+    const onWindowResize = () => {
+      syncSize();
+      scheduleSettleSync();
+    };
+    window.addEventListener('resize', onWindowResize);
+
+    const raf = requestAnimationFrame(() => syncSize());
+    if (typeof document.fonts?.ready?.then === 'function') {
+      void document.fonts.ready.then(() => {
+        if (!disposed) syncSize();
+      });
+    }
+
+    const socket = new WebSocket(terminalSocketUrl(connectionId, initialSize.cols, initialSize.rows));
     socketRef.current = socket;
     setState('connecting');
 
@@ -176,7 +241,7 @@ export function TerminalPane({
         return;
       }
       setState('open');
-      sendResize();
+      syncSize();
     };
 
     socket.onmessage = (event) => {
@@ -191,6 +256,7 @@ export function TerminalPane({
       if (frame.t === 'output') term.write(frame.data);
       else if (frame.t === 'ready') {
         setState('open');
+        syncSize(true);
         enterDirectory();
       } else if (frame.t === 'exit') {
         setState('closed');
@@ -220,12 +286,73 @@ export function TerminalPane({
       }
     });
 
-    // Copy-on-select mirrors the usual terminal behaviour; middle-click paste and
-    // Ctrl/Cmd+C keep working because the handler never swallows the event.
-    const selection = term.onSelectionChange(() => {
+    let lastCustomPasteAt = 0;
+
+    const pasteClipboard = async () => {
+      if (disposed) return;
+      const text = await readClipboardText();
+      if (disposed || !text) return;
+      if (socket.readyState === WebSocket.OPEN) {
+        term.paste(text);
+      }
+      term.focus();
+    };
+
+    // PuTTY / terminal keyboard shortcuts:
+    // - Shift+Insert / Ctrl+V / Ctrl+Shift+V / Cmd+V -> paste
+    // - Ctrl+Insert / Ctrl+Shift+C / Cmd+C -> copy selection (keeps selection)
+    // - Ctrl+C with active selection -> copy & clear selection; without selection -> SIGINT
+    // - Bare Insert continues to send \x1b[2~ to vim / nano / shell.
+    term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+      const action = classifyTerminalKeyAction(event, term.hasSelection());
+      if (action === 'none') return true;
+
+      event.preventDefault();
+      if (event.type === 'keydown') {
+        event.stopPropagation();
+        if (action === 'paste') {
+          lastCustomPasteAt = Date.now();
+          void pasteClipboard();
+        } else {
+          const selected = term.getSelection();
+          if (selected) void writeClipboardText(selected);
+          if (action === 'copy-and-clear') term.clearSelection();
+        }
+      }
+      return false;
+    });
+
+    // Guard against Chromium firing a duplicate synthetic `paste` event on the
+    // hidden textarea right after keydown already triggered our custom paste.
+    const onHostPasteCapture = (event: ClipboardEvent) => {
+      if (Date.now() - lastCustomPasteAt < 250) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    host.addEventListener('paste', onHostPasteCapture, true);
+
+    let isPointerSelecting = false;
+    let copiedOnCurrentMouseUp = false;
+    let selectionDebounceTimer: number | null = null;
+    let pendingMousePaste: { button: number; x: number; y: number } | null = null;
+
+    const copySelectionIfNonEmpty = () => {
       if (!useUiStore.getState().copyOnSelect) return;
       const text = term.getSelection();
-      if (text) void navigator.clipboard?.writeText(text).catch(() => undefined);
+      if (text) void writeClipboardText(text);
+    };
+
+    // PuTTY copy-on-select: non-mouse selections debounce cleanly, while pointer
+    // drags copy once on LMB mouseup instead of hammering clipboard IPC mid-drag.
+    const selection = term.onSelectionChange(() => {
+      if (!useUiStore.getState().copyOnSelect) return;
+      if (isPointerSelecting || copiedOnCurrentMouseUp) return;
+      if (selectionDebounceTimer !== null) window.clearTimeout(selectionDebounceTimer);
+      selectionDebounceTimer = window.setTimeout(() => {
+        selectionDebounceTimer = null;
+        copySelectionIfNonEmpty();
+      }, 40);
     });
 
     // Scrollbar interaction support:
@@ -257,13 +384,90 @@ export function TerminalPane({
       viewport.addEventListener('mousedown', onViewportMouseDown);
     }
 
-    const onWindowMouseUp = () => {
+    // Intercept middle-click / right-click in capture phase before xterm or Chromium
+    // initiates Windows autoscroll panning, TUI click reporting (unless Shift), or menus.
+    const onHostMouseDownCapture = (event: MouseEvent) => {
+      if (isScrollbarEvent(event)) return;
+      if (
+        shouldHandleTerminalMousePaste({
+          button: event.button,
+          shiftKey: event.shiftKey,
+          mouseTrackingMode: term.modes.mouseTrackingMode,
+        })
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        pendingMousePaste = { button: event.button, x: event.clientX, y: event.clientY };
+        term.focus();
+        return;
+      }
+      if (event.button === 0) {
+        isPointerSelecting = true;
+        copiedOnCurrentMouseUp = false;
+      }
+    };
+    host.addEventListener('mousedown', onHostMouseDownCapture, true);
+
+    const onHostAuxClickCapture = (event: MouseEvent) => {
+      if (isScrollbarEvent(event)) return;
+      if (
+        event.button === 1 &&
+        shouldHandleTerminalMousePaste({
+          button: event.button,
+          shiftKey: event.shiftKey,
+          mouseTrackingMode: term.modes.mouseTrackingMode,
+        })
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    host.addEventListener('auxclick', onHostAuxClickCapture, true);
+
+    const onHostContextMenuCapture = (event: MouseEvent) => {
+      if (isScrollbarEvent(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    host.addEventListener('contextmenu', onHostContextMenuCapture, true);
+
+    const onWindowMouseUp = (event: MouseEvent) => {
       if (isDraggingScrollbar) {
         isDraggingScrollbar = false;
         term.focus();
       }
+      if (isPointerSelecting && event.button === 0) {
+        isPointerSelecting = false;
+        if (selectionDebounceTimer !== null) {
+          window.clearTimeout(selectionDebounceTimer);
+          selectionDebounceTimer = null;
+        }
+        copiedOnCurrentMouseUp = true;
+        copySelectionIfNonEmpty();
+        window.setTimeout(() => {
+          copiedOnCurrentMouseUp = false;
+        }, 0);
+      }
+      if (pendingMousePaste && event.button === pendingMousePaste.button) {
+        const origin = pendingMousePaste;
+        pendingMousePaste = null;
+        const insideHost = event.target instanceof Node && host.contains(event.target);
+        const moved = Math.hypot(event.clientX - origin.x, event.clientY - origin.y);
+        if (insideHost && moved <= 16 && !isScrollbarEvent(event)) {
+          event.preventDefault();
+          event.stopPropagation();
+          void pasteClipboard();
+        }
+      }
     };
     window.addEventListener('mouseup', onWindowMouseUp);
+
+    const onWindowBlur = () => {
+      isDraggingScrollbar = false;
+      isPointerSelecting = false;
+      pendingMousePaste = null;
+    };
+    window.addEventListener('blur', onWindowBlur);
 
     // A terminal that does not hold focus silently swallows the first keystrokes.
     const focus = () => term.focus();
@@ -290,13 +494,22 @@ export function TerminalPane({
       disposed = true;
       cancelAnimationFrame(raf);
       cancelAnimationFrame(rafFocus);
+      if (settleTimer !== null) window.clearTimeout(settleTimer);
+      if (selectionDebounceTimer !== null) window.clearTimeout(selectionDebounceTimer);
       observer.disconnect();
+      window.removeEventListener('resize', onWindowResize);
       if (viewport) {
         viewport.removeEventListener('mousedown', onViewportMouseDown);
       }
       window.removeEventListener('mouseup', onWindowMouseUp);
+      window.removeEventListener('blur', onWindowBlur);
+      host.removeEventListener('paste', onHostPasteCapture, true);
+      host.removeEventListener('mousedown', onHostMouseDownCapture, true);
+      host.removeEventListener('auxclick', onHostAuxClickCapture, true);
+      host.removeEventListener('contextmenu', onHostContextMenuCapture, true);
       host.removeEventListener('mousedown', onHostMouseDown);
       host.removeEventListener('wheel', onHostWheel);
+      resizeDisposable.dispose();
       disposable.dispose();
       selection.dispose();
       if (socket.readyState === WebSocket.CONNECTING) {
@@ -306,7 +519,9 @@ export function TerminalPane({
       } else {
         socket.close();
       }
+      syncSizeRef.current = null;
       terminalRef.current = null;
+      fitRef.current = null;
       socketRef.current = null;
       searchRef.current = null;
       // xterm schedules a viewport refresh on a macrotask; detaching first and
@@ -332,29 +547,47 @@ export function TerminalPane({
   }, [theme]);
 
   useEffect(() => {
+    const rafId = requestAnimationFrame(() => {
+      syncSizeRef.current?.();
+    });
     const id = window.setTimeout(() => {
-      try {
-        fitRef.current?.fit();
-      } catch {
-        /* hidden pane */
-      }
+      syncSizeRef.current?.();
     }, 50);
-    return () => window.clearTimeout(id);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.clearTimeout(id);
+    };
   }, [inspectorOpen, inspectorWidth]);
 
   useEffect(() => {
     const term = terminalRef.current;
     if (term) term.options.fontSize = terminalFontSize;
-    // Refit after the cell size changes.
+    // Refit and sync PTY size after the cell metrics update.
+    const rafId = requestAnimationFrame(() => {
+      syncSizeRef.current?.();
+    });
     const id = window.setTimeout(() => {
-      try {
-        fitRef.current?.fit();
-      } catch {
-        /* hidden pane */
-      }
+      syncSizeRef.current?.();
     }, 0);
-    return () => window.clearTimeout(id);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.clearTimeout(id);
+    };
   }, [terminalFontSize]);
+
+  useEffect(() => {
+    if (!visible) return;
+    const rafId = requestAnimationFrame(() => {
+      syncSizeRef.current?.();
+    });
+    const id = window.setTimeout(() => {
+      syncSizeRef.current?.();
+    }, 50);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.clearTimeout(id);
+    };
+  }, [visible]);
 
   const runSearch = useCallback(
     (direction: 'next' | 'prev') => {
@@ -399,6 +632,16 @@ export function TerminalPane({
         </span>
         <span className="spacer" />
         {detail && state !== 'open' ? <span className="tpane__detail truncate">{detail}</span> : null}
+        <IconButton
+          icon="clipboard"
+          label={t('term.copyOnSelectHint')}
+          size={14}
+          active={copyOnSelect}
+          onClick={() => {
+            setCopyOnSelect(!copyOnSelect);
+            terminalRef.current?.focus();
+          }}
+        />
         <IconButton
           icon="search"
           label={t('term.search')}

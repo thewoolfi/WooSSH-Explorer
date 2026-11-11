@@ -65,6 +65,8 @@ interface DesktopBridge {
   ): () => void;
   reveal(path: string): Promise<void>;
   openExternal(url: string): Promise<void>;
+  readClipboard?(): Promise<string>;
+  writeClipboard?(text: string): Promise<void>;
   info(): Promise<{
     version: string;
     electron: string;
@@ -235,4 +237,72 @@ export function onEditEvent(handler: (event: EditEvent) => void): () => void {
   const desktop = desktopBridge;
   if (!desktop) return () => undefined;
   return desktop.onEditEvent(handler);
+}
+
+/**
+ * Reads plain text from the OS clipboard.
+ *
+ * Uses the native Electron IPC bridge when running inside the desktop shell so
+ * mouse-button / Shift+Insert pastes never hit Chromium permission blocks, and
+ * falls back to `navigator.clipboard.readText()` in a browser tab.
+ */
+export async function readClipboardText(): Promise<string> {
+  if (typeof desktopBridge?.readClipboard === 'function') {
+    try {
+      return await desktopBridge.readClipboard();
+    } catch {
+      /* fall through to Web Clipboard API */
+    }
+  }
+  if (typeof navigator !== 'undefined' && typeof navigator.clipboard?.readText === 'function') {
+    try {
+      return await navigator.clipboard.readText();
+    } catch {
+      return '';
+    }
+  }
+  return '';
+}
+
+/**
+ * Writes plain text to the OS clipboard cleanly in both desktop and browser builds.
+ */
+export async function writeClipboardText(text: string): Promise<boolean> {
+  if (!text) return false;
+  if (typeof desktopBridge?.writeClipboard === 'function') {
+    try {
+      await desktopBridge.writeClipboard(text);
+      return true;
+    } catch {
+      /* fall through to Web Clipboard API */
+    }
+  }
+  if (typeof navigator !== 'undefined' && typeof navigator.clipboard?.writeText === 'function') {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      /* try legacy DOM copy fallback over plain HTTP */
+    }
+  }
+  if (typeof document !== 'undefined' && document.body) {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    try {
+      textarea.select();
+      return typeof document.execCommand === 'function' && document.execCommand('copy');
+    } catch {
+      return false;
+    } finally {
+      textarea.remove();
+      previousFocus?.focus?.();
+    }
+  }
+  return false;
 }
