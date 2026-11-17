@@ -1,7 +1,7 @@
 import { constants as fsConstants } from 'node:fs';
 import type { Readable, Writable } from 'node:stream';
 
-import { ApiError, badRequest, mapError, notFound } from '../errors.js';
+import { ApiError, badRequest, conflict, mapError, notFound } from '../errors.js';
 import type { Logger } from '../logger.js';
 import type { DirectoryListing, FileEntry, EntryKind, ReadResult } from '../types.js';
 import {
@@ -572,7 +572,10 @@ export class SftpFs {
         new Promise<void>((resolve, reject) => {
           sftp.mkdir(target, (err) => (err ? reject(err) : resolve()));
         }),
-    ).catch((err: unknown) => {
+    ).catch(async (err: unknown) => {
+      if (await this.isDirectory(target)) {
+        throw conflict(`Directory already exists: ${target}`, { path: target });
+      }
       throw this.mapPathError(err, target);
     });
 
@@ -700,6 +703,21 @@ export class SftpFs {
         code: 4,
       });
     }
+
+    // Fast path: try `rm -rf` over exec first when available
+    try {
+      const rmCommand = `rm -rf -- ${shellQuote(target)}`;
+      const result = await this.connection.exec(rmCommand, { timeoutMs: 15_000 });
+      if (!execToolUnavailable(result) && result.code === 0) {
+        return;
+      }
+    } catch {
+      /* fallback to SFTP recursive deletion */
+    }
+
+    // SFTP fallback: guarantee write + execute traversal permissions on the directory
+    // so that readdir, child unlink and rmdir succeed even if permissions lacked +x or +w
+    await this.chmod(target, 0o700).catch(() => undefined);
 
     const children = await this.withSftp(
       (sftp) =>

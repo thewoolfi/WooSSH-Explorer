@@ -31,7 +31,7 @@ import type {
 } from '../types.js';
 import { kindOf, modeText } from '../ssh/fsOps.js';
 import { detectReadKind } from '../util/fileKind.js';
-import { ApiError, badRequest, notFound } from '../errors.js';
+import { ApiError, badRequest, conflict, notFound } from '../errors.js';
 
 /** The connection id the interface uses for this computer. */
 export const LOCAL_CONNECTION_ID = 'local';
@@ -44,7 +44,7 @@ function localError(err: unknown, target: string): ApiError {
     return badRequest(`Permission denied: ${target}`, { path: target, code });
   }
   if (code === 'ENOTDIR') return badRequest(`Not a directory: ${target}`, { path: target });
-  if (code === 'EEXIST') return badRequest(`Already exists: ${target}`, { path: target });
+  if (code === 'EEXIST') return conflict(`Already exists: ${target}`, { path: target });
   const message = err instanceof Error ? err.message : String(err);
   return badRequest(message, { path: target });
 }
@@ -110,9 +110,16 @@ function entryFor(virtual: string, name: string, stats: import('node:fs').Stats)
       : stats.isFile()
         ? 'file'
         : 'other';
-  // Windows reports 0o666 / 0o777 and does not implement the Unix bits; the numbers shown
-  // are the closest honest equivalent, so a folder still reads as `drwx`.
-  const mode = (stats.mode & 0o7777) | (kind === 'directory' ? 0o40000 : 0);
+  // Windows reports 0o666 / 0o777 and does not implement the Unix bits; directories must
+  // have execute/traversal bits (0o755 / 0o555) so they still read as `drwx` and can be
+  // entered, listed and traversed when relayed or copied to Linux hosts.
+  const isDir = kind === 'directory';
+  let modeBits = stats.mode & 0o7777;
+  if (isWindows && isDir) {
+    const isWritable = (modeBits & 0o200) !== 0;
+    modeBits = isWritable ? 0o755 : 0o555;
+  }
+  const mode = modeBits | (isDir ? 0o40000 : 0);
   return {
     name,
     path: virtual,
@@ -394,10 +401,16 @@ export class LocalFs {
     for (const input of paths) {
       const target = normalizeLocalPath(await this.resolve(input));
       try {
-        await fs.rm(toNativePath(target), { recursive, force: false });
+        await fs.rm(toNativePath(target), { recursive, force: true });
         deleted.push(target);
       } catch (err) {
-        failed.push({ path: target, message: err instanceof Error ? err.message : String(err) });
+        try {
+          await fs.chmod(toNativePath(target), 0o777).catch(() => undefined);
+          await fs.rm(toNativePath(target), { recursive, force: true });
+          deleted.push(target);
+        } catch (retryErr) {
+          failed.push({ path: target, message: err instanceof Error ? err.message : String(err) });
+        }
       }
     }
     return { deleted, failed };

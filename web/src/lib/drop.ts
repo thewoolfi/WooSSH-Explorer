@@ -76,21 +76,22 @@ async function walk(
   out: DroppedTree,
   rawFiles: File[],
 ): Promise<void> {
+  const cleanName = entry.name.replace(/\\/g, '/');
   if (entry.isFile) {
     try {
       const file = await fileFromEntry(entry as FileSystemFileEntry);
-      out.files.push({ file, relativePath: prefix === '' ? file.name : `${prefix}/${file.name}` });
+      out.files.push({ file, relativePath: prefix === '' ? cleanName : `${prefix}/${cleanName}` });
     } catch {
       const match = rawFiles.find((f) => f.name === entry.name);
       if (match) {
-        out.files.push({ file: match, relativePath: prefix === '' ? match.name : `${prefix}/${match.name}` });
+        out.files.push({ file: match, relativePath: prefix === '' ? cleanName : `${prefix}/${cleanName}` });
       }
     }
     return;
   }
   if (!entry.isDirectory) return;
 
-  const directory = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
+  const directory = prefix === '' ? cleanName : `${prefix}/${cleanName}`;
   out.directories.push(directory);
   const reader = (entry as FileSystemDirectoryEntry).createReader();
   for (const child of await readAllEntries(reader)) {
@@ -140,8 +141,20 @@ export function collectDroppedTree(transfer: DataTransfer): Promise<DroppedTree>
     // Crucial fallback: If entry-based walking produced no files (common on Windows OS file drops
     // where webkitGetAsEntry returns null or fails), ALWAYS fall back to rawFiles!
     if (out.files.length === 0 && rawFiles.length > 0) {
+      const seen = new Set<string>();
       for (const file of rawFiles) {
-        out.files.push({ file, relativePath: file.name });
+        const raw = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+        const relativePath = raw.replace(/\\/g, '/').replace(/^\/+/, '');
+        out.files.push({ file, relativePath });
+        const segments = relativePath.split('/');
+        segments.pop();
+        for (let i = 0; i < segments.length; i += 1) {
+          const directory = segments.slice(0, i + 1).join('/');
+          if (directory && !seen.has(directory)) {
+            seen.add(directory);
+            out.directories.push(directory);
+          }
+        }
       }
     }
 
@@ -151,20 +164,21 @@ export function collectDroppedTree(transfer: DataTransfer): Promise<DroppedTree>
 
 /**
  * Same result from a `<input type="file" webkitdirectory>`: every file carries
- * `webkitRelativePath` such as `project/src/main.ts`.
+ * `webkitRelativePath` such as `project/src/main.ts` or `project\src\main.ts`.
  */
 export function collectPickedTree(fileList: FileList | null): DroppedTree {
   const out: DroppedTree = { files: [], directories: [], unsupported: false };
   if (!fileList) return out;
   const seen = new Set<string>();
   for (const file of Array.from(fileList)) {
-    const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+    const raw = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+    const relativePath = raw.replace(/\\/g, '/').replace(/^\/+/, '');
     out.files.push({ file, relativePath });
     const segments = relativePath.split('/');
     segments.pop();
     for (let i = 0; i < segments.length; i += 1) {
       const directory = segments.slice(0, i + 1).join('/');
-      if (!seen.has(directory)) {
+      if (directory && !seen.has(directory)) {
         seen.add(directory);
         out.directories.push(directory);
       }
@@ -177,8 +191,9 @@ export function collectPickedTree(fileList: FileList | null): DroppedTree {
 export function groupByDirectory(files: DroppedFile[]): Map<string, File[]> {
   const groups = new Map<string, File[]>();
   for (const { file, relativePath } of files) {
-    const slash = relativePath.lastIndexOf('/');
-    const directory = slash === -1 ? '' : relativePath.slice(0, slash);
+    const normalized = relativePath.replace(/\\/g, '/');
+    const slash = normalized.lastIndexOf('/');
+    const directory = slash === -1 ? '' : normalized.slice(0, slash);
     const bucket = groups.get(directory);
     if (bucket) bucket.push(file);
     else groups.set(directory, [file]);
@@ -190,7 +205,8 @@ export function groupByDirectory(files: DroppedFile[]): Map<string, File[]> {
 export function directoryOrder(directories: string[]): string[] {
   const unique = new Set<string>();
   for (const directory of directories) {
-    const segments = directory.split('/').filter(Boolean);
+    const normalized = directory.replace(/\\/g, '/');
+    const segments = normalized.split('/').filter(Boolean);
     for (let i = 0; i < segments.length; i += 1) unique.add(segments.slice(0, i + 1).join('/'));
   }
   return [...unique].sort((a, b) => a.split('/').length - b.split('/').length || a.localeCompare(b));

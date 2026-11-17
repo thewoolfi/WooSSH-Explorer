@@ -268,6 +268,20 @@ describe('relayed transfers', () => {
           listing.json.listing.entries.map((entry: any) => entry.name),
           ['helper.ts'],
         );
+
+        // Relayed directory retains execute traversal bits so contents are accessible
+        const statProject = await h.json('GET', `/api/connections/${targetId}/fs/stat?path=${encodeURIComponent('/incoming/project')}`);
+        assert.equal(statProject.status, 200);
+        assert.ok((statProject.json.entry.mode & 0o111) !== 0, 'relayed directory must retain execute traversal bits');
+
+        // Relayed directory can be cleanly deleted recursively
+        const del = await h.json('POST', `/api/connections/${targetId}/fs/delete`, {
+          paths: ['/incoming/project'],
+          recursive: true,
+        });
+        assert.equal(del.status, 200);
+        assert.deepEqual(del.json.failed, []);
+        assert.deepEqual(del.json.deleted, ['/incoming/project']);
       } finally {
         await second.close();
       }

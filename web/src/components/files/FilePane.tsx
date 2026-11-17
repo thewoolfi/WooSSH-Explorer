@@ -164,9 +164,65 @@ export function FilePane({ tabId }: { tabId: string }) {
     [filesTab, setInspector, store],
   );
 
+  const downloadSelection = useCallback(
+    async (targets: FileEntry[]) => {
+      if (!filesTab || targets.length === 0) return;
+      if (targets.length === 1 && targets[0] && targets[0].kind !== 'directory') {
+        const only = targets[0];
+        const url = api.downloadUrl(filesTab.connectionId, only.path);
+        void downloadWithResume({ url, name: only.name }).then((result) => {
+          if (result !== null) return;
+          const anchor = document.createElement('a');
+          anchor.href = url;
+          anchor.download = only.name;
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+        });
+        return;
+      }
+      const zipName =
+        targets.length === 1 && targets[0]
+          ? `${targets[0].name}.zip`
+          : `${basenameRemotePath(filesTab.path) || 'files'}.zip`;
+      pushToast({ level: 'info', title: t('xfer.batchPreparing', { count: targets.length }) });
+      try {
+        const response = await fetch(
+          `/api/connections/${encodeURIComponent(filesTab.connectionId)}/fs/download-batch`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paths: targets.map((t) => t.path), name: zipName }),
+          },
+        );
+        if (!response.ok) throw new Error(`Server answered ${response.status}`);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = zipName;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      } catch (error) {
+        pushToast({
+          level: 'error',
+          title: 'Batch download failed',
+          detail: error instanceof Error ? error.message : undefined,
+        });
+      }
+    },
+    [filesTab, pushToast, t],
+  );
+
   const downloadEntry = useCallback(
     (entry: FileEntry) => {
       if (!filesTab || !connection) return;
+      if (entry.kind === 'directory') {
+        void downloadSelection([entry]);
+        return;
+      }
       const url = api.downloadUrl(filesTab.connectionId, entry.path);
       // In the desktop the shell owns the transfer: it can keep the partial and continue
       // it later, which a browser anchor cannot. The anchor stays the browser fallback.
@@ -180,46 +236,7 @@ export function FilePane({ tabId }: { tabId: string }) {
         anchor.remove();
       });
     },
-    [connection, filesTab],
-  );
-
-  const downloadSelection = useCallback(
-    async (targets: FileEntry[]) => {
-      if (!filesTab || targets.length === 0) return;
-      if (targets.length === 1) {
-        const only = targets[0];
-        if (only) downloadEntry(only);
-        return;
-      }
-      pushToast({ level: 'info', title: t('xfer.batchPreparing', { count: targets.length }) });
-      try {
-        const response = await fetch(
-          `/api/connections/${encodeURIComponent(filesTab.connectionId)}/fs/download-batch`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ paths: targets.map((t) => t.path) }),
-          },
-        );
-        if (!response.ok) throw new Error(`Server answered ${response.status}`);
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const anchor = document.createElement('a');
-        anchor.href = url;
-        anchor.download = `${basenameRemotePath(filesTab.path) || 'files'}.zip`;
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
-        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      } catch (error) {
-        pushToast({
-          level: 'error',
-          title: 'Batch download failed',
-          detail: error instanceof Error ? error.message : undefined,
-        });
-      }
-    },
-    [downloadEntry, filesTab, pushToast],
+    [connection, downloadSelection, filesTab],
   );
 
   const openDialog = useCallback(
@@ -310,7 +327,9 @@ export function FilePane({ tabId }: { tabId: string }) {
         } catch (error) {
           // An existing folder answers 409; anything else is worth reporting.
           const message = error instanceof Error ? error.message : String(error);
-          if (!/exist/i.test(message)) failures.push(directory);
+          const status = (error as { status?: number })?.status;
+          const isConflict = status === 409 || /exist|conflict/i.test(message);
+          if (!isConflict) failures.push(directory);
         }
       }
 

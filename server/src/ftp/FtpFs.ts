@@ -8,6 +8,7 @@ import type { DirectoryListing, FileEntry, EntryKind, ReadResult } from '../type
 import { DEFAULT_MAX_READ_BYTES, MAX_MAX_READ_BYTES, countLines, detectReadKind, mimeTypeFor } from '../util/fileKind.js';
 import {
   basename,
+  isInsideRemotePath,
   joinRemotePath,
   normalizeRemotePath,
   parentRemotePath,
@@ -521,6 +522,10 @@ export class FtpFs {
           throw badRequest(`Destination already exists: ${targetPath}`);
         }
 
+        if (srcStat.kind === 'directory' && isInsideRemotePath(targetPath, srcPath)) {
+          throw badRequest(`Refusing to copy ${srcPath} into its own subtree (${targetPath}).`);
+        }
+
         if (srcStat.kind === 'directory') {
           await this.mkdirRecursive(targetPath);
           const children = await this.list({ path: srcPath });
@@ -563,6 +568,11 @@ export class FtpFs {
 
         if (!options.overwrite && (await this.exists(targetPath))) {
           throw badRequest(`Destination already exists: ${targetPath}`);
+        }
+
+        const srcStat = await this.stat(srcPath, false);
+        if (srcStat.kind === 'directory' && isInsideRemotePath(targetPath, srcPath)) {
+          throw badRequest(`Refusing to move ${srcPath} into its own subtree (${targetPath}).`);
         }
 
         // Try fast atomic rename first

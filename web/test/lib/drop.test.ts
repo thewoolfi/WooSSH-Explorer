@@ -90,11 +90,38 @@ describe('groupByDirectory', () => {
     expect(groups.get('')).toHaveLength(1);
     expect(groups.get('sub')).toHaveLength(2);
   });
+
+  test('normalizes Windows backslashes in relative paths', () => {
+    const f1 = new File(['1'], 'file.txt');
+    const groups = groupByDirectory([
+      { file: f1, relativePath: 'win\\folder\\file.txt' },
+    ]);
+    expect(groups.get('win/folder')).toHaveLength(1);
+  });
 });
 
 describe('directoryOrder', () => {
   test('orders shallowest directories first', () => {
     const ordered = directoryOrder(['a/b/c', 'a', 'a/b']);
     expect(ordered).toEqual(['a', 'a/b', 'a/b/c']);
+  });
+
+  test('handles Windows backslash separators', () => {
+    const ordered = directoryOrder(['a\\b\\c', 'a']);
+    expect(ordered).toEqual(['a', 'a/b', 'a/b/c']);
+  });
+});
+
+describe('collectPickedTree', () => {
+  test('normalizes Windows backslashes and extracts directory structure', () => {
+    const f1 = Object.assign(new File(['data'], 'main.ts'), { webkitRelativePath: 'project\\src\\main.ts' });
+    const f2 = Object.assign(new File(['data'], 'pkg.json'), { webkitRelativePath: 'project\\pkg.json' });
+    const fileList = [f1, f2] as unknown as FileList;
+
+    const result = collectPickedTree(fileList);
+    expect(result.files).toHaveLength(2);
+    expect(result.files[0]!.relativePath).toBe('project/src/main.ts');
+    expect(result.files[1]!.relativePath).toBe('project/pkg.json');
+    expect(result.directories).toEqual(['project', 'project/src']);
   });
 });

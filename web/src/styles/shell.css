@@ -986,6 +986,251 @@ body.is-resizing * {
   flex: none;
 }
 
+/* Terminal Inspector tabs */
+.tinsp__tabs {
+  display: flex;
+  align-items: center;
+  background: var(--surface-1);
+  padding: 0 var(--sp-2);
+  gap: var(--sp-1);
+}
+
+.tinsp__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1-5);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+}
+
+.tinsp__tab:hover {
+  color: var(--text);
+}
+
+.tinsp__tab--active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  font-weight: var(--fw-semibold);
+}
+
+.tinsp__tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 6px;
+  border-radius: var(--r-full);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  background: var(--surface-inset);
+  color: var(--text-dim);
+}
+
+.tinsp__tab--active .tinsp__tab-badge {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* History panel */
+.tinsp__history-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.tinsp__history-toolbar {
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.tinsp__history-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: var(--surface-inset);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 0 var(--sp-2-5);
+  gap: var(--sp-2);
+  height: 28px;
+  transition: border-color var(--dur-1) var(--ease);
+}
+
+.tinsp__history-search:focus-within {
+  border-color: var(--accent);
+}
+
+.tinsp__history-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  font-size: var(--fs-xs);
+  color: var(--text);
+  outline: none;
+}
+
+.tinsp__history-input::placeholder {
+  color: var(--text-faint);
+}
+
+.tinsp__history-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--r-xs);
+}
+
+.tinsp__history-clear-btn:hover {
+  color: var(--text);
+}
+
+.tinsp__history-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: var(--fs-micro);
+  color: var(--text-muted);
+}
+
+.tinsp__history-count {
+  font-family: var(--font-mono);
+}
+
+.tinsp__history-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-1-5) var(--sp-2);
+  background: rgba(242, 85, 90, 0.15);
+  border-radius: var(--r-xs);
+  font-size: var(--fs-micro);
+}
+
+.tinsp__history-confirm-text {
+  color: var(--danger, #f2555a);
+  font-weight: var(--fw-medium);
+}
+
+.tinsp__history-confirm-btns {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.tinsp__history-list {
+  padding: var(--sp-3) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.tinsp__hcard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1-5);
+  padding: var(--sp-2-5) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-0);
+  transition: border-color var(--dur-1) var(--ease), background var(--dur-1) var(--ease);
+}
+
+.tinsp__hcard:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+}
+
+.tinsp__hcard--executed {
+  border-color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+}
+
+.tinsp__hcard-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.tinsp__hcard-time {
+  font-size: var(--fs-micro);
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+}
+
+.tinsp__hcard-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
+.tinsp__hcard-body {
+  cursor: pointer;
+}
+
+.tinsp__hcard-code {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--text);
+  line-height: var(--lh-tight);
+  word-break: break-all;
+  white-space: pre-wrap;
+  padding: 4px var(--sp-2);
+  border-radius: var(--r-xs);
+  background: var(--surface-inset);
+  border: 1px solid var(--line-soft);
+  transition: border-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+
+.tinsp__hcard:hover .tinsp__hcard-code {
+  border-color: var(--accent);
+}
+
+.tinsp__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-8) var(--sp-4);
+  text-align: center;
+  gap: var(--sp-2);
+}
+
+.tinsp__empty-icon {
+  color: var(--text-faint);
+  margin-bottom: var(--sp-1);
+}
+
+.tinsp__empty-title {
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-dim);
+}
+
+.tinsp__empty-desc {
+  font-size: var(--fs-micro);
+  color: var(--text-muted);
+  max-width: 240px;
+}
+
 /* ------------------------------------------------------------ boot screen */
 .boot {
   display: grid;

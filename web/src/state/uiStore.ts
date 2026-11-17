@@ -62,6 +62,8 @@ interface UiState {
   /** Terminal font size in pixels; the pane refits when it changes. */
   terminalFontSize: number;
   copyOnSelect: boolean;
+  inspectorTab: 'presets' | 'history';
+  setInspectorTab: (tab: 'presets' | 'history') => void;
   commandPaletteOpen: boolean;
   /** The pinned-host-key manager. */
   knownHostsOpen: boolean;
@@ -190,6 +192,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   showHidden: prefs.showHidden ?? false,
   terminalFontSize: prefs.terminalFontSize ?? 12.5,
   copyOnSelect: prefs.copyOnSelect ?? true,
+  inspectorTab: 'presets',
   commandPaletteOpen: false,
   knownHostsOpen: false,
   serverStatsOpen: false,
@@ -289,6 +292,8 @@ export const useUiStore = create<UiState>((set, get) => ({
     set({ copyOnSelect: value });
     savePrefs(get());
   },
+
+  setInspectorTab: (tab) => set({ inspectorTab: tab }),
 
   setCommandPalette: (open) => set({ commandPaletteOpen: open }),
 

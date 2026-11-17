@@ -2,6 +2,43 @@
 
 All notable changes to WooSSH will be documented in this file.
 
+## [1.3.2] - 2026-11-13
+
+### Added
+- **Terminal Command History Panel & Search:**
+  - Added persistent command history store (`commandHistoryStore.ts`) with `localStorage` persistence (up to 500 commands, MRU ordered without duplicates).
+  - Added dedicated **«🕒 История»** button in the terminal toolbar to immediately toggle the Command History panel.
+  - Added tab switcher in Terminal Inspector: **«Быстрые команды»** (Presets) and **«История команд»** with dynamic command counter badge.
+  - Interactive history cards:
+    - **One-click Execution:** run command immediately in the terminal via the `Выполнить` button.
+    - **Prompt Insertion:** insert command into the prompt line without trailing newline via the `Вставить` (pencil) button to review/edit arguments before pressing Enter.
+    - **Clipboard Copy:** one-click copy with visual feedback badge.
+    - **Single-entry Deletion & Full History Clear:** remove individual commands or clear history with confirmation.
+    - **Live Search Filter:** instantly filter commands by substring as you type.
+    - **Relative Timestamps:** human-readable relative time display («только что», «5 мин назад», «2 ч назад», «2 дн назад»).
+  - Intelligent shell prompt stripper (`terminalHistory.ts`): parses and extracts exact command text on Enter from bash, zsh, sh, oh-my-zsh (`git:(main)`), and root/user prompts.
+
+### Fixed
+- **Linux Folder Copy/Paste Permissions & Deletion:**
+  - Fixed Windows-to-Linux folder copy (`relay`) leaving target folders empty or inaccessible: on Windows, Node.js reports directory modes as `0666` (missing execute traversal bit `0111`), which previously caused `chmod` on Linux to strip directory search permissions. Added `ensureDirectoryMode` in `remotePath.ts`, `localFs.ts`, `TransferManager.ts`, and `fsCopy.ts` guaranteeing user traversal permissions (`0755` / `0700`).
+  - Fixed deletion of directories with restricted permissions: `removeOne` in `fsOps.ts` now uses fast native `rm -rf` via `exec` when available, with an SFTP fallback that guarantees `0700` write & search permissions before listing and unlinking child files.
+- **Windows Path Separators in Drag-and-Drop & Folder Uploads:**
+  - Fixed Windows drag-and-drop and folder picker (`webkitRelativePath`) producing backslashes `\`: normalized backslashes to `/` across `collectPickedTree`, `collectDroppedTree`, `groupByDirectory`, and `directoryOrder` in `drop.ts` so dropped/selected directory trees are created accurately on Linux servers instead of creating files with literal backslashes in their names.
+- **Single Folder Download Support:**
+  - Fixed single folder download failing with HTTP 400 (`A directory cannot be streamed; use fs/download-batch`): `FilePane`'s `downloadEntry` and `downloadSelection` now automatically route folder downloads to `fs/download-batch`, downloading `<folder-name>.zip` with clean object URL cleanup.
+- **Cross-Host Clipboard Paste Routing:**
+  - Fixed cross-host copy-paste refusal: `planPaste` in `clipboardStore.ts` now only flags files as `already-here` when copying within the *same* connection; pasting across different hosts when destination path shares a parent directory name (such as `/home/user`) now cleanly plans a `relay` transfer.
+- **Upload Race Conditions & Parent Directory Guarantee:**
+  - Added automatic parent directory creation (`mkdirRecursive`) directly in `TransferManager.upload` before opening write streams, preventing `ENOENT` / `SFTP_ERROR: No such file or directory` errors during concurrent batch uploads.
+- **FTP Subtree Protection in Copy & Move:**
+  - Guarded `FtpFs.copy` and `FtpFs.move` against copying or moving a directory into its own subtree using `isInsideRemotePath`, preventing infinite recursive loops.
+- **Local Filesystem Deletion on Windows:**
+  - Updated `localFs.remove` to use `force: true` with automatic `chmod(0o777)` fallback, preventing deletion failures when removing directories containing read-only files on Windows.
+- **False Partial Failure Toast on Folder Upload:**
+  - Fixed `FilePane.handleTree` displaying alarming "Partial failure" warnings when creating intermediate folders that already exist: mapped SFTP status 4 and `EEXIST` conflicts to HTTP 409 (`conflict`) on server and recognized 409 conflicts in client directory creation.
+
+---
+
 ## [1.3.1] - 2026-11-11
 
 ### Added

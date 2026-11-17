@@ -1,7 +1,7 @@
 import { pipeline } from 'node:stream/promises';
 
 import { ApiError, badRequest } from '../errors.js';
-import { joinRemotePath } from '../util/remotePath.js';
+import { ensureDirectoryMode, joinRemotePath } from '../util/remotePath.js';
 import type { SftpFs } from './fsOps.js';
 
 /**
@@ -92,7 +92,8 @@ async function copyNode(
       await copyNode(fs, child.path, joinRemotePath(target, child.name), limits, state, stats, depth + 1);
     }
     // After the children, so a read-only source directory does not block its own contents.
-    await fs.chmod(target, entry.mode & 0o7777).catch(() => undefined);
+    const targetDirMode = ensureDirectoryMode(entry.mode);
+    await fs.chmod(target, targetDirMode).catch(() => undefined);
     stats.directories += 1;
     return;
   }

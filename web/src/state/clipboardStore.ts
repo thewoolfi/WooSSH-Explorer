@@ -46,17 +46,18 @@ export function planPaste(input: {
   const { clipboard, targetConnectionId, targetDir } = input;
   if (!clipboard || clipboard.paths.length === 0) return { ok: false, reason: 'empty' };
 
-  // Pasting something into the folder it already lives in would mean copying a
-  // path onto itself, which the server refuses — say so plainly instead.
+  const sameHost = clipboard.connectionId === targetConnectionId;
+
+  // Pasting something into the folder it already lives in on the same host would
+  // mean copying a path onto itself, which the server refuses — say so plainly instead.
   const alreadyHere: string[] = [];
   const candidates: string[] = [];
   for (const path of clipboard.paths) {
-    if (parentRemotePath(path) === targetDir) alreadyHere.push(path);
+    if (sameHost && parentRemotePath(path) === targetDir) alreadyHere.push(path);
     else candidates.push(path);
   }
   if (candidates.length === 0) return { ok: false, reason: 'already-here' };
 
-  const sameHost = clipboard.connectionId === targetConnectionId;
   if (sameHost) {
     return {
       ok: true,

@@ -18,7 +18,7 @@ import type {
   TransferState,
 } from '../types.js';
 import { newId } from '../util/ids.js';
-import { basename, joinRemotePath, normalizeRemotePath } from '../util/remotePath.js';
+import { basename, ensureDirectoryMode, joinRemotePath, normalizeRemotePath, parentRemotePath } from '../util/remotePath.js';
 import type { SftpFs } from '../ssh/fsOps.js';
 import type { FtpFs } from '../ftp/FtpFs.js';
 import type { ManagedConnection } from '../ssh/SshConnectionManager.js';
@@ -590,6 +590,10 @@ export class TransferManager extends EventEmitter {
       if (transfer.state === 'cancelled') return transfer;
       this.transition(record, 'active', { startedAt: Date.now() });
 
+      const parent = parentRemotePath(remotePath);
+      if (parent && parent !== '/' && parent !== '.') {
+        await params.fs.mkdirRecursive(parent).catch(() => undefined);
+      }
       target = await params.fs.openWriteStream(remotePath);
       // §7 `speedLimitKbps` covers every active transfer, uploads included: pausing the request
       // body is what pushes back on the client that is sending it.
@@ -780,7 +784,8 @@ export class TransferManager extends EventEmitter {
         );
       }
       // After the children, so a read-only source directory does not block its own contents.
-      await params.target.fs.chmod(targetPath, entry.mode & 0o7777).catch(() => undefined);
+      const targetDirMode = ensureDirectoryMode(entry.mode);
+      await params.target.fs.chmod(targetPath, targetDirMode).catch(() => undefined);
       return;
     }
 

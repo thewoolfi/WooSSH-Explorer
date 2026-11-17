@@ -118,6 +118,19 @@ describe('planPaste — refusals', () => {
     });
     expect(decision).toEqual({ ok: false, reason: 'already-here' });
   });
+
+  test('cross-host paste allows same directory name and plans relay', () => {
+    const decision = planPaste({
+      clipboard: clip({ connectionId: 'c2', paths: ['/home/user/project'] }),
+      targetConnectionId: 'c1',
+      targetDir: '/home/user',
+    });
+    expect(decision.ok).toBe(true);
+    if (!decision.ok) return;
+    expect(decision.plan.kind).toBe('relay');
+    expect(decision.plan.sources).toEqual(['/home/user/project']);
+    expect(decision.plan.alreadyHere).toEqual([]);
+  });
 });
 
 describe('clipboard helpers', () => {

@@ -17,6 +17,8 @@ import {
   type TerminalSize,
 } from '../../lib/terminalResize';
 import { useUiStore } from '../../state/uiStore';
+import { useCommandHistoryStore } from '../../state/commandHistoryStore';
+import { extractCommandFromLine } from '../../lib/terminalHistory';
 import { useT } from '../../i18n/useT';
 import { Icon } from '../ui/Icon';
 import { IconButton, StatusDot } from '../ui/Primitives';
@@ -78,6 +80,8 @@ export function TerminalPane({
   const inspectorOpen = useUiStore((s) => s.isInspectorOpen(tabId));
   const setInspector = useUiStore((s) => s.setInspector);
   const toggleInspector = useUiStore((s) => s.toggleInspector);
+  const inspectorTab = useUiStore((s) => s.inspectorTab);
+  const setInspectorTab = useUiStore((s) => s.setInspectorTab);
   const inspectorWidth = useUiStore((s) => s.inspectorWidth);
   const setInspectorWidth = useUiStore((s) => s.setInspectorWidth);
   const resetInspectorWidth = useUiStore((s) => s.resetInspectorWidth);
@@ -280,9 +284,43 @@ export function TerminalPane({
       setDetail(t('term.unreachable'));
     };
 
+    let typedLineBuffer = '';
+
     const disposable = term.onData((data) => {
       if (socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ t: 'input', data }));
+      }
+
+      // Record executed commands into command history on Enter
+      if (data === '\r' || data === '\n' || data === '\r\n') {
+        let cmd = typedLineBuffer.trim();
+        try {
+          const activeBuffer = term.buffer.active;
+          const line = activeBuffer.getLine(activeBuffer.cursorY + activeBuffer.baseY);
+          const screenLine = line ? line.translateToString(true) : '';
+          const extracted = extractCommandFromLine(screenLine, typedLineBuffer);
+          if (extracted) {
+            cmd = extracted;
+          }
+        } catch {
+          /* fallback to typedLineBuffer */
+        }
+        typedLineBuffer = '';
+        if (cmd) {
+          useCommandHistoryStore.getState().addCommand(cmd, connectionId);
+        }
+      } else if (data === '\x7f' || data === '\x08') {
+        // Backspace
+        typedLineBuffer = typedLineBuffer.slice(0, -1);
+      } else if (data === '\x03' || data === '\x15') {
+        // Ctrl+C (cancel) or Ctrl+U (line kill)
+        typedLineBuffer = '';
+      } else if (data === '\x17') {
+        // Ctrl+W (word kill)
+        typedLineBuffer = typedLineBuffer.replace(/\s*\S+$/, '');
+      } else if (!data.startsWith('\x1b') && (data >= ' ' || data === '\t')) {
+        // Printable character or tab
+        typedLineBuffer += data;
       }
     });
 
@@ -675,11 +713,34 @@ export function TerminalPane({
           {t('term.reconnect')}
         </Button>
         <Button
-          variant={inspectorOpen ? 'secondary' : 'ghost'}
+          variant={inspectorOpen && inspectorTab === 'history' ? 'secondary' : 'ghost'}
+          size="sm"
+          icon="clock"
+          onClick={() => {
+            if (inspectorOpen && inspectorTab === 'history') {
+              setInspector(false, tabId);
+            } else {
+              setInspectorTab('history');
+              setInspector(true, tabId);
+            }
+          }}
+          title={t('term.historyTitle')}
+        >
+          {t('term.history')}
+        </Button>
+        <Button
+          variant={inspectorOpen && inspectorTab === 'presets' ? 'secondary' : 'ghost'}
           size="sm"
           icon="sliders"
-          onClick={() => toggleInspector(tabId)}
-          title={t(inspectorOpen ? 'topbar.hideInspector' : 'topbar.showInspector')}
+          onClick={() => {
+            if (inspectorOpen && inspectorTab === 'presets') {
+              setInspector(false, tabId);
+            } else {
+              setInspectorTab('presets');
+              setInspector(true, tabId);
+            }
+          }}
+          title={t(inspectorOpen && inspectorTab === 'presets' ? 'topbar.hideInspector' : 'topbar.showInspector')}
         >
           {t('palette.toggleInspector')}
         </Button>
@@ -722,9 +783,19 @@ export function TerminalPane({
             onWidthReset={resetInspectorWidth}
             onClose={() => setInspector(false, tabId)}
             onRunCommand={(cmd) => {
+              const trimmed = cmd.trim();
               const socket = socketRef.current;
               if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({ t: 'input', data: `${cmd.trim()}\r` }));
+                socket.send(JSON.stringify({ t: 'input', data: `${trimmed}\r` }));
+                terminalRef.current?.focus();
+                useCommandHistoryStore.getState().addCommand(trimmed, connectionId);
+              }
+            }}
+            onInsertCommand={(cmd) => {
+              const trimmed = cmd.trim();
+              const socket = socketRef.current;
+              if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({ t: 'input', data: trimmed }));
                 terminalRef.current?.focus();
               }
             }}

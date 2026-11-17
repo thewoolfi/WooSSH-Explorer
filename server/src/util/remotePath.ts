@@ -52,6 +52,22 @@ export function joinRemotePath(...parts: string[]): string {
   return normalizeRemotePath(result);
 }
 
+/**
+ * Ensures directory permissions contain at least owner rwx (0o700) and preserve
+ * group/other read+execute bits so that directories can always be entered, listed, and deleted.
+ */
+export function ensureDirectoryMode(mode: number | undefined): number {
+  if (mode === undefined) return 0o755;
+  let raw = mode & 0o7777;
+  // A directory must always have owner rwx (0o700) to allow traversal, listing, and deletion.
+  raw |= 0o700;
+  // If group has read bit (0o040), ensure it also has group execute bit (0o010).
+  if ((raw & 0o040) !== 0) raw |= 0o010;
+  // If other has read bit (0o004), ensure it also has other execute bit (0o001).
+  if ((raw & 0o004) !== 0) raw |= 0o001;
+  return raw;
+}
+
 /** The parent directory, or `null` for the filesystem root. */
 export function parentRemotePath(input: string): string | null {
   const normalized = normalizeRemotePath(input);

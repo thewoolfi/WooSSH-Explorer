@@ -337,6 +337,26 @@ describe('fs mutations', () => {
     assert.ok(gone.status >= 400 && gone.status < 500, `the deleted tree must be gone, got ${gone.status}`);
   });
 
+  test('deleting a directory with restricted permissions (0666) succeeds recursively', async () => {
+    const restrictedDir = `/restricted-${Date.now()}`;
+    await h.json('POST', fsPath('/fs/mkdir'), { path: restrictedDir });
+    await h.request('POST', fsPath(`/fs/upload?path=${encodeURIComponent(restrictedDir)}&name=child.txt`), {
+      headers: { 'content-type': 'application/octet-stream' },
+      body: Buffer.from('hello inside restricted\n'),
+    });
+    // Set restricted permissions without execute bits (0666)
+    await h.json('POST', fsPath('/fs/chmod'), { path: restrictedDir, mode: '666' });
+
+    // Recursive delete must succeed despite lack of execute bit on entry
+    const del = await h.json('POST', fsPath('/fs/delete'), { paths: [restrictedDir], recursive: true });
+    assert.equal(del.status, 200, del.text.slice(0, 300));
+    assert.deepEqual(del.json.failed, []);
+    assert.ok(del.json.deleted.includes(restrictedDir));
+
+    const gone = await h.json('GET', fsPath(`/fs/stat?path=${encodeURIComponent(restrictedDir)}`));
+    assert.ok(gone.status >= 400 && gone.status < 500);
+  });
+
   test('chmod rewrites modeText as expected', async () => {
     const before = await h.json('GET', fsPath(`/fs/stat?path=${encodeURIComponent(HELLO_FILE.path)}`));
     assert.equal(before.json.entry.modeText, '-rw-r--r--');

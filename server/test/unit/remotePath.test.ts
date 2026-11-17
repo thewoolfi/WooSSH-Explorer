@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import {
   basename,
+  ensureDirectoryMode,
   isAbsoluteRemotePath,
   isHomeRelative,
   isInsideRemotePath,
@@ -100,5 +101,26 @@ describe('path predicates', () => {
     assert.equal(isInsideRemotePath('/a', '/a'), true);
     assert.equal(isInsideRemotePath('/ab', '/a'), false);
     assert.equal(isInsideRemotePath('/a/b', '/'), true);
+  });
+});
+
+describe('ensureDirectoryMode', () => {
+  it('defaults undefined to 0o755', () => {
+    assert.equal(ensureDirectoryMode(undefined), 0o755);
+  });
+
+  it('guarantees user rwx (0o700) for directories', () => {
+    assert.equal(ensureDirectoryMode(0o666), 0o777);
+    assert.equal(ensureDirectoryMode(0o644), 0o755);
+    assert.equal(ensureDirectoryMode(0o755), 0o755);
+    assert.equal(ensureDirectoryMode(0o700), 0o700);
+    assert.equal(ensureDirectoryMode(0o400), 0o700);
+  });
+
+  it('adds execute bit when read bit is present on group or other', () => {
+    // 0o640 -> user rwx (0o700), group r+x (0o050), other 0 -> 0o750
+    assert.equal(ensureDirectoryMode(0o640), 0o750);
+    // 0o604 -> user rwx (0o700), group 0, other r+x (0o005) -> 0o705
+    assert.equal(ensureDirectoryMode(0o604), 0o705);
   });
 });
